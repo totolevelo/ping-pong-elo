@@ -1,0 +1,125 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #0f0f13;
+  color: #e8e8f0;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  min-height: 100vh;
+  padding: 24px 16px 48px;
+}
+
+#app {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+header h1 {
+  font-size: 1.8rem;
+  font-weight: 700;
+}
+
+#total-matches {
+  font-size: 0.85rem;
+  color: #888;
+}
+
+/* ── Leaderboard ── */
+
+#leaderboard {
+  margin-bottom: 40px;
+}
+
+.player-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  margin-bottom: 8px;
+  background: #1a1a24;
+  border-radius: 10px;
+  border: 1px solid #2a2a38;
+  transition: background 0.15s;
+}
+
+.player-row:hover {
+  background: #22223a;
+}
+
+.rank {
+  font-size: 1.1rem;
+  width: 32px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.player-name {
+  font-weight: 600;
+  font-size: 1rem;
+  flex: 1;
+}
+
+.elo {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #a78bfa;
+  min-width: 56px;
+  text-align: right;
+}
+
+.record {
+  font-size: 0.8rem;
+  color: #888;
+  min-width: 80px;
+  text-align: right;
+}
+
+.winrate {
+  font-size: 0.8rem;
+  color: #6ee7b7;
+  min-width: 40px;
+  text-align: right;
+}
+
+.player-row.rank-1 { border-color: #f59e0b44; }
+.player-row.rank-2 { border-color: #9ca3af44; }
+.player-row.rank-3 { border-color: #b45309aa; }
+
+/* ── Recent matches ── */
+
+#recent-matches h2 {
+  font-size: 1rem;
+  color: #888;
+  font-weight: 500;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.match-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  margin-bottom: 6px;
+  background: #1a1a24;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.match-winner { font-weight: 600; color: #6ee7b7; }
+.match-loser  { color: #f87171; }
+.match-delta  { font-size: 0.78rem; color: #888; }
+.match-format { font-size: 0.78rem; color: #555; }
+
+.loading { color: #555; padding: 16px 0; }
