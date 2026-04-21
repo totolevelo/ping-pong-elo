@@ -291,9 +291,9 @@
     const { data } = await sb.from('leaderboard').select('*').order('rank');
     if (!data || data.length === 0) return;
 
-    const totalMatches = data.reduce((s, p) => s + Number(p.wins) + Number(p.losses), 0) / 2;
+    const { count: totalMatches } = await sb.from('matches').select('*', { count: 'exact', head: true });
     document.getElementById('subtitle').textContent =
-      `${data.length} joueurs · ${totalMatches} matchs joués`;
+      `${data.length} joueurs · ${totalMatches ?? 0} matchs joués`;
 
     // Podium top 3
     const top3 = data.slice(0, 3);
