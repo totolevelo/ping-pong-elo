@@ -5,142 +5,398 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>🏓 Classement Ping Pong</title>
   <style>
+    :root {
+      --bg:       #0c0c12;
+      --surface:  #14141e;
+      --surface2: #1c1c2a;
+      --border:   #2a2a3a;
+      --text:     #e8e8f0;
+      --muted:    #666680;
+      --accent:   #7c6af0;
+      --green:    #4ade80;
+      --red:      #f87171;
+      --gold:     #f59e0b;
+      --silver:   #9ca3af;
+      --bronze:   #b45309;
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      background: #0f0f13;
-      color: #e8e8f0;
+      background: var(--bg);
+      color: var(--text);
       font-family: 'Segoe UI', system-ui, sans-serif;
       min-height: 100vh;
-      padding: 24px 16px 48px;
     }
 
-    #app { max-width: 720px; margin: 0 auto; }
-
+    /* ── Header ── */
     header {
-      display: flex;
-      align-items: baseline;
-      gap: 12px;
-      margin-bottom: 32px;
+      background: linear-gradient(135deg, #1a1030 0%, #0c0c12 60%);
+      border-bottom: 1px solid var(--border);
+      padding: 28px 24px 24px;
+      text-align: center;
     }
-    header h1 { font-size: 1.8rem; font-weight: 700; }
-    #total-matches { font-size: 0.85rem; color: #888; }
+    header h1 { font-size: 2rem; font-weight: 800; letter-spacing: -0.5px; }
+    header h1 span { color: var(--accent); }
+    #subtitle { margin-top: 6px; font-size: 0.85rem; color: var(--muted); }
 
+    /* ── Layout ── */
+    main {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 32px 16px 64px;
+    }
+
+    /* ── Podium ── */
+    #podium {
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      gap: 12px;
+      margin-bottom: 40px;
+    }
+
+    .podium-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px 14px;
+      text-align: center;
+      cursor: pointer;
+      transition: transform 0.15s, border-color 0.15s;
+      flex: 1;
+      max-width: 200px;
+      position: relative;
+    }
+    .podium-card:hover { transform: translateY(-4px); }
+    .podium-card.p1 { border-color: #f59e0b55; order: 2; padding-top: 24px; }
+    .podium-card.p2 { border-color: #9ca3af44; order: 1; }
+    .podium-card.p3 { border-color: #b4530944; order: 3; }
+
+    .podium-medal { font-size: 1.8rem; margin-bottom: 8px; }
+    .podium-name  { font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .podium-elo   { font-size: 1.4rem; font-weight: 800; color: var(--accent); }
+    .podium-record{ font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+
+    /* ── Section title ── */
+    .section-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
+      margin-top: 36px;
+    }
+
+    /* ── Leaderboard ── */
     .player-row {
       display: flex;
       align-items: center;
-      gap: 16px;
-      padding: 14px 18px;
-      margin-bottom: 8px;
-      background: #1a1a24;
+      gap: 14px;
+      padding: 12px 16px;
+      margin-bottom: 6px;
+      background: var(--surface);
       border-radius: 10px;
-      border: 1px solid #2a2a38;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s;
     }
-    .player-row.rank-1 { border-color: #f59e0b44; }
-    .player-row.rank-2 { border-color: #9ca3af44; }
-    .player-row.rank-3 { border-color: #b4530988; }
+    .player-row:hover { background: var(--surface2); border-color: var(--accent)44; }
+    .player-rank  { width: 28px; text-align: center; font-size: 0.85rem; color: var(--muted); flex-shrink: 0; }
+    .player-name  { flex: 1; font-weight: 600; font-size: 0.95rem; }
+    .player-elo   { font-weight: 700; color: var(--accent); font-size: 1rem; }
+    .player-record{ font-size: 0.78rem; color: var(--muted); min-width: 70px; text-align: right; }
+    .player-wr    { font-size: 0.78rem; color: var(--green); min-width: 36px; text-align: right; }
 
-    .rank { font-size: 1.1rem; width: 32px; text-align: center; flex-shrink: 0; }
-    .player-name { font-weight: 600; font-size: 1rem; flex: 1; }
-    .elo { font-size: 1.1rem; font-weight: 700; color: #a78bfa; min-width: 56px; text-align: right; }
-    .record { font-size: 0.8rem; color: #888; min-width: 80px; text-align: right; }
-    .winrate { font-size: 0.8rem; color: #6ee7b7; min-width: 40px; text-align: right; }
-
-    #recent-matches { margin-top: 40px; }
-    #recent-matches h2 {
-      font-size: 0.85rem;
-      color: #888;
-      font-weight: 500;
-      margin-bottom: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
+    /* ── Matches ── */
     .match-row {
       display: flex;
       align-items: center;
-      justify-content: space-between;
       padding: 10px 16px;
       margin-bottom: 6px;
-      background: #1a1a24;
+      background: var(--surface);
       border-radius: 8px;
-      font-size: 0.9rem;
+      border: 1px solid var(--border);
       gap: 8px;
+      font-size: 0.88rem;
     }
-    .match-winner { font-weight: 600; color: #6ee7b7; }
-    .match-loser  { color: #f87171; }
-    .match-meta   { font-size: 0.78rem; color: #555; margin-left: auto; white-space: nowrap; }
+    .match-winner { font-weight: 600; color: var(--green); flex: 1; }
+    .match-delta  { font-size: 0.75rem; color: var(--muted); }
+    .match-vs     { color: var(--border); font-size: 0.75rem; }
+    .match-loser  { color: var(--red); flex: 1; }
+    .match-meta   { font-size: 0.72rem; color: var(--muted); margin-left: auto; white-space: nowrap; }
 
-    .loading { color: #555; padding: 16px 0; }
+    /* ── Modal ── */
+    #modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #00000088;
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    #modal-overlay.open { display: flex; }
+
+    #modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      width: 100%;
+      max-width: 420px;
+      padding: 28px;
+      position: relative;
+      animation: pop 0.18s ease;
+    }
+    @keyframes pop {
+      from { transform: scale(0.95); opacity: 0; }
+      to   { transform: scale(1);    opacity: 1; }
+    }
+
+    #modal-close {
+      position: absolute;
+      top: 16px; right: 16px;
+      background: var(--surface2);
+      border: none;
+      color: var(--muted);
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 1rem;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #modal-close:hover { color: var(--text); }
+
+    #modal-name {
+      font-size: 1.5rem;
+      font-weight: 800;
+      margin-bottom: 20px;
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .stat-box {
+      background: var(--surface2);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
+    }
+    .stat-box .val { font-size: 1.3rem; font-weight: 800; color: var(--accent); }
+    .stat-box .lbl { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+
+    .stat-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--surface2);
+      border-radius: 10px;
+      margin-bottom: 8px;
+      font-size: 0.88rem;
+    }
+    .stat-row .icon { font-size: 1.1rem; }
+    .stat-row .info { flex: 1; }
+    .stat-row .name { font-weight: 600; }
+    .stat-row .count { font-size: 0.75rem; color: var(--muted); }
+
+    .loading { color: var(--muted); padding: 8px 0; font-size: 0.88rem; }
+
+    /* ── ELO history ── */
+    #elo-chart {
+      margin-top: 16px;
+      background: var(--surface2);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    #elo-chart canvas { width: 100%; display: block; }
+    #elo-chart .chart-label {
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
   </style>
 </head>
 <body>
-  <div id="app">
-    <header>
-      <h1>🏓 Classement Ping Pong</h1>
-      <span id="total-matches"></span>
-    </header>
-    <section id="leaderboard"><p class="loading">Chargement...</p></section>
-    <section id="recent-matches">
-      <h2>Derniers matchs</h2>
-      <div id="matches-list"><p class="loading">Chargement...</p></div>
-    </section>
+
+<header>
+  <h1>🏓 Ping Pong <span>ELO</span></h1>
+  <p id="subtitle">Chargement...</p>
+</header>
+
+<main>
+  <div id="podium"></div>
+
+  <p class="section-title">Classement complet</p>
+  <div id="leaderboard"></div>
+
+  <p class="section-title">Derniers matchs</p>
+  <div id="matches-list"></div>
+</main>
+
+<!-- Modal stats joueur -->
+<div id="modal-overlay">
+  <div id="modal">
+    <button id="modal-close">✕</button>
+    <div id="modal-name"></div>
+    <div id="modal-content"><p class="loading">Chargement...</p></div>
   </div>
+</div>
 
-  <script type="module">
-    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
-    const SUPABASE_URL      = 'https://xrzusqhfmdybrvwepcmv.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhyenVzcWhmbWR5YnJ2d2VwY212Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MTQ0MzksImV4cCI6MjA5MjI5MDQzOX0.XUXI14nrxuVTusXCX5lmFdBxMppz3Nu5NNNE2CIGO_I';
+  const SUPABASE_URL      = 'https://xrzusqhfmdybrvwepcmv.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhyenVzcWhmbWR5YnJ2d2VwY212Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MTQ0MzksImV4cCI6MjA5MjI5MDQzOX0.XUXI14nrxuVTusXCX5lmFdBxMppz3Nu5NNNE2CIGO_I';
+  const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    const MEDALS = ['🥇', '🥈', '🥉'];
+  const MEDALS = ['🥇', '🥈', '🥉'];
 
-    async function loadLeaderboard() {
-      const { data } = await supabase.from('leaderboard').select('*').order('rank');
-      const section = document.getElementById('leaderboard');
-      if (!data || data.length === 0) { section.innerHTML = '<p class="loading">Aucun joueur.</p>'; return; }
+  // ── Leaderboard ──────────────────────────────────────────────────────────────
 
-      const total = data.reduce((s, p) => s + Number(p.wins) + Number(p.losses), 0) / 2;
-      document.getElementById('total-matches').textContent = `${total} matchs joués`;
+  async function loadLeaderboard() {
+    const { data } = await sb.from('leaderboard').select('*').order('rank');
+    if (!data || data.length === 0) return;
 
-      section.innerHTML = data.map((p, i) => {
-        const rank = MEDALS[i] ?? `<span style="color:#555">${i+1}.</span>`;
-        const cls  = i < 3 ? `player-row rank-${i+1}` : 'player-row';
-        return `<div class="${cls}">
-          <span class="rank">${rank}</span>
-          <span class="player-name">${p.display_name}</span>
-          <span class="winrate">${p.winrate}%</span>
-          <span class="record">${p.wins}V / ${p.losses}D</span>
-          <span class="elo">${p.elo}</span>
-        </div>`;
-      }).join('');
+    const totalMatches = data.reduce((s, p) => s + Number(p.wins) + Number(p.losses), 0) / 2;
+    document.getElementById('subtitle').textContent =
+      `${data.length} joueurs · ${totalMatches} matchs joués`;
+
+    // Podium top 3
+    const top3 = data.slice(0, 3);
+    document.getElementById('podium').innerHTML = top3.map((p, i) => `
+      <div class="podium-card p${i+1}" onclick="openModal('${p.id}', '${escHtml(p.display_name)}')">
+        <div class="podium-medal">${MEDALS[i]}</div>
+        <div class="podium-name">${escHtml(p.display_name)}</div>
+        <div class="podium-elo">${p.elo}</div>
+        <div class="podium-record">${p.wins}V · ${p.losses}D · ${p.winrate}%</div>
+      </div>`).join('');
+
+    // Full list (rank 4+)
+    document.getElementById('leaderboard').innerHTML = data.slice(3).map(p => `
+      <div class="player-row" onclick="openModal('${p.id}', '${escHtml(p.display_name)}')">
+        <span class="player-rank">${p.rank}</span>
+        <span class="player-name">${escHtml(p.display_name)}</span>
+        <span class="player-wr">${p.winrate}%</span>
+        <span class="player-record">${p.wins}V / ${p.losses}D</span>
+        <span class="player-elo">${p.elo}</span>
+      </div>`).join('') || '<p class="loading">Seulement 3 joueurs ou moins.</p>';
+  }
+
+  // ── Matches ──────────────────────────────────────────────────────────────────
+
+  async function loadMatches() {
+    const { data } = await sb
+      .from('matches')
+      .select('id, format, winner_delta, played_at, winner:players!matches_winner_id_fkey(display_name), loser:players!matches_loser_id_fkey(display_name)')
+      .order('played_at', { ascending: false })
+      .limit(15);
+
+    const el = document.getElementById('matches-list');
+    if (!data || data.length === 0) { el.innerHTML = '<p class="loading">Aucun match.</p>'; return; }
+
+    el.innerHTML = data.map(m => {
+      const date = new Date(m.played_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      return `<div class="match-row">
+        <span class="match-winner">🏆 ${escHtml(m.winner.display_name)}</span>
+        <span class="match-delta">+${m.winner_delta}</span>
+        <span class="match-vs">vs</span>
+        <span class="match-loser">${escHtml(m.loser.display_name)}</span>
+        <span class="match-meta">${m.format}pts · ${date}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Modal stats ──────────────────────────────────────────────────────────────
+
+  window.openModal = async (playerId, name) => {
+    document.getElementById('modal-name').textContent = name;
+    document.getElementById('modal-content').innerHTML = '<p class="loading">Chargement...</p>';
+    document.getElementById('modal-overlay').classList.add('open');
+
+    const [{ data: player }, { data: wins }, { data: losses }, { data: top1 }] = await Promise.all([
+      sb.from('players').select('*').eq('id', playerId).single(),
+      sb.from('matches').select('loser_id, players!matches_loser_id_fkey(display_name)').eq('winner_id', playerId),
+      sb.from('matches').select('winner_id, players!matches_winner_id_fkey(display_name)').eq('loser_id', playerId),
+      sb.from('top1_log').select('started_at, ended_at').eq('player_id', playerId),
+    ]);
+
+    const total   = player.wins + player.losses;
+    const winrate = total > 0 ? Math.round(player.wins / total * 100) : 0;
+
+    // Top1 days
+    const top1Days = (top1 ?? []).reduce((sum, r) => {
+      const s = new Date(r.started_at).getTime();
+      const e = r.ended_at ? new Date(r.ended_at).getTime() : Date.now();
+      return sum + (e - s);
+    }, 0);
+    const days = Math.floor(top1Days / 86400000);
+
+    // Bête noire
+    const lossMap = {};
+    for (const m of losses ?? []) {
+      const k = m.winner_id;
+      if (!lossMap[k]) lossMap[k] = { name: m.players.display_name, count: 0 };
+      lossMap[k].count++;
     }
+    const beteNoire = Object.values(lossMap).sort((a, b) => b.count - a.count)[0];
 
-    async function loadMatches() {
-      const { data } = await supabase
-        .from('matches')
-        .select('id, format, winner_delta, played_at, winner:players!matches_winner_id_fkey(display_name), loser:players!matches_loser_id_fkey(display_name)')
-        .order('played_at', { ascending: false })
-        .limit(10);
-
-      const section = document.getElementById('matches-list');
-      if (!data || data.length === 0) { section.innerHTML = '<p class="loading">Aucun match.</p>'; return; }
-
-      section.innerHTML = data.map(m => {
-        const date = new Date(m.played_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-        return `<div class="match-row">
-          <span class="match-winner">🏆 ${m.winner.display_name}</span>
-          <span style="font-size:0.78rem;color:#888">+${m.winner_delta}</span>
-          <span style="color:#555">vs</span>
-          <span class="match-loser">${m.loser.display_name}</span>
-          <span class="match-meta">${m.format}pts · ${date}</span>
-        </div>`;
-      }).join('');
+    // Victime
+    const winMap = {};
+    for (const m of wins ?? []) {
+      const k = m.loser_id;
+      if (!winMap[k]) winMap[k] = { name: m.players.display_name, count: 0 };
+      winMap[k].count++;
     }
+    const victime = Object.values(winMap).sort((a, b) => b.count - a.count)[0];
 
-    loadLeaderboard();
-    loadMatches();
-    setInterval(() => { loadLeaderboard(); loadMatches(); }, 30_000);
-  </script>
+    // ELO history
+    const allMatches = [...(wins ?? []).map(m => ({ ...m, won: true })), ...(losses ?? []).map(m => ({ ...m, won: false }))];
+
+    document.getElementById('modal-content').innerHTML = `
+      <div class="stat-grid">
+        <div class="stat-box"><div class="val">${player.elo}</div><div class="lbl">ELO</div></div>
+        <div class="stat-box"><div class="val">${winrate}%</div><div class="lbl">Winrate</div></div>
+        <div class="stat-box"><div class="val">${days > 0 ? days + 'j' : '—'}</div><div class="lbl">Jours top 1</div></div>
+        <div class="stat-box"><div class="val" style="color:var(--green)">${player.wins}</div><div class="lbl">Victoires</div></div>
+        <div class="stat-box"><div class="val" style="color:var(--red)">${player.losses}</div><div class="lbl">Défaites</div></div>
+        <div class="stat-box"><div class="val">${total}</div><div class="lbl">Matchs</div></div>
+      </div>
+      ${beteNoire ? `
+      <div class="stat-row">
+        <span class="icon">😈</span>
+        <div class="info"><div class="name">${escHtml(beteNoire.name)}</div><div class="count">Bête noire — ${beteNoire.count} défaite(s)</div></div>
+      </div>` : ''}
+      ${victime ? `
+      <div class="stat-row">
+        <span class="icon">🎯</span>
+        <div class="info"><div class="name">${escHtml(victime.name)}</div><div class="count">Victime préférée — ${victime.count} victoire(s)</div></div>
+      </div>` : ''}
+    `;
+  };
+
+  document.getElementById('modal-close').onclick = () =>
+    document.getElementById('modal-overlay').classList.remove('open');
+  document.getElementById('modal-overlay').onclick = (e) => {
+    if (e.target === document.getElementById('modal-overlay'))
+      document.getElementById('modal-overlay').classList.remove('open');
+  };
+
+  // ── Utils ─────────────────────────────────────────────────────────────────────
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Init ─────────────────────────────────────────────────────────────────────
+  loadLeaderboard();
+  loadMatches();
+  setInterval(() => { loadLeaderboard(); loadMatches(); }, 30_000);
+</script>
 </body>
 </html>
