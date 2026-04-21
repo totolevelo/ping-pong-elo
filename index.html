@@ -4,7 +4,74 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>🏓 Classement Ping Pong</title>
-  <link rel="stylesheet" href="/src/style.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0f0f13;
+      color: #e8e8f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      padding: 24px 16px 48px;
+    }
+
+    #app { max-width: 720px; margin: 0 auto; }
+
+    header {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    header h1 { font-size: 1.8rem; font-weight: 700; }
+    #total-matches { font-size: 0.85rem; color: #888; }
+
+    .player-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 18px;
+      margin-bottom: 8px;
+      background: #1a1a24;
+      border-radius: 10px;
+      border: 1px solid #2a2a38;
+    }
+    .player-row.rank-1 { border-color: #f59e0b44; }
+    .player-row.rank-2 { border-color: #9ca3af44; }
+    .player-row.rank-3 { border-color: #b4530988; }
+
+    .rank { font-size: 1.1rem; width: 32px; text-align: center; flex-shrink: 0; }
+    .player-name { font-weight: 600; font-size: 1rem; flex: 1; }
+    .elo { font-size: 1.1rem; font-weight: 700; color: #a78bfa; min-width: 56px; text-align: right; }
+    .record { font-size: 0.8rem; color: #888; min-width: 80px; text-align: right; }
+    .winrate { font-size: 0.8rem; color: #6ee7b7; min-width: 40px; text-align: right; }
+
+    #recent-matches { margin-top: 40px; }
+    #recent-matches h2 {
+      font-size: 0.85rem;
+      color: #888;
+      font-weight: 500;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .match-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      margin-bottom: 6px;
+      background: #1a1a24;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      gap: 8px;
+    }
+    .match-winner { font-weight: 600; color: #6ee7b7; }
+    .match-loser  { color: #f87171; }
+    .match-meta   { font-size: 0.78rem; color: #555; margin-left: auto; white-space: nowrap; }
+
+    .loading { color: #555; padding: 16px 0; }
+  </style>
 </head>
 <body>
   <div id="app">
@@ -12,16 +79,68 @@
       <h1>🏓 Classement Ping Pong</h1>
       <span id="total-matches"></span>
     </header>
-
-    <section id="leaderboard">
-      <div class="loading">Chargement...</div>
-    </section>
-
+    <section id="leaderboard"><p class="loading">Chargement...</p></section>
     <section id="recent-matches">
       <h2>Derniers matchs</h2>
-      <div class="loading">Chargement...</div>
+      <div id="matches-list"><p class="loading">Chargement...</p></div>
     </section>
   </div>
-  <script type="module" src="/src/main.js"></script>
+
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+    const SUPABASE_URL      = 'https://xrzusqhfmdybrvwepcmv.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhyenVzcWhmbWR5YnJ2d2VwY212Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MTQ0MzksImV4cCI6MjA5MjI5MDQzOX0.XUXI14nrxuVTusXCX5lmFdBxMppz3Nu5NNNE2CIGO_I';
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const MEDALS = ['🥇', '🥈', '🥉'];
+
+    async function loadLeaderboard() {
+      const { data } = await supabase.from('leaderboard').select('*').order('rank');
+      const section = document.getElementById('leaderboard');
+      if (!data || data.length === 0) { section.innerHTML = '<p class="loading">Aucun joueur.</p>'; return; }
+
+      const total = data.reduce((s, p) => s + Number(p.wins) + Number(p.losses), 0) / 2;
+      document.getElementById('total-matches').textContent = `${total} matchs joués`;
+
+      section.innerHTML = data.map((p, i) => {
+        const rank = MEDALS[i] ?? `<span style="color:#555">${i+1}.</span>`;
+        const cls  = i < 3 ? `player-row rank-${i+1}` : 'player-row';
+        return `<div class="${cls}">
+          <span class="rank">${rank}</span>
+          <span class="player-name">${p.display_name}</span>
+          <span class="winrate">${p.winrate}%</span>
+          <span class="record">${p.wins}V / ${p.losses}D</span>
+          <span class="elo">${p.elo}</span>
+        </div>`;
+      }).join('');
+    }
+
+    async function loadMatches() {
+      const { data } = await supabase
+        .from('matches')
+        .select('id, format, winner_delta, played_at, winner:players!matches_winner_id_fkey(display_name), loser:players!matches_loser_id_fkey(display_name)')
+        .order('played_at', { ascending: false })
+        .limit(10);
+
+      const section = document.getElementById('matches-list');
+      if (!data || data.length === 0) { section.innerHTML = '<p class="loading">Aucun match.</p>'; return; }
+
+      section.innerHTML = data.map(m => {
+        const date = new Date(m.played_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        return `<div class="match-row">
+          <span class="match-winner">🏆 ${m.winner.display_name}</span>
+          <span style="font-size:0.78rem;color:#888">+${m.winner_delta}</span>
+          <span style="color:#555">vs</span>
+          <span class="match-loser">${m.loser.display_name}</span>
+          <span class="match-meta">${m.format}pts · ${date}</span>
+        </div>`;
+      }).join('');
+    }
+
+    loadLeaderboard();
+    loadMatches();
+    setInterval(() => { loadLeaderboard(); loadMatches(); }, 30_000);
+  </script>
 </body>
 </html>
