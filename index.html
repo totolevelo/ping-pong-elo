@@ -127,6 +127,28 @@
     .match-loser  { color: var(--red); flex: 1; }
     .match-meta   { font-size: 0.72rem; color: var(--muted); margin-left: auto; white-space: nowrap; }
 
+    /* ── Pagination ── */
+    #pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .page-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 7px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: border-color 0.12s;
+    }
+    .page-btn:hover:not(:disabled) { border-color: var(--accent); }
+    .page-btn:disabled { opacity: 0.3; cursor: default; }
+    #page-info { font-size: 0.82rem; color: var(--muted); min-width: 80px; text-align: center; }
+
     /* ── Modal ── */
     #modal-overlay {
       display: none;
@@ -236,8 +258,13 @@
   <p class="section-title">Classement complet</p>
   <div id="leaderboard"></div>
 
-  <p class="section-title">Derniers matchs</p>
+  <p class="section-title">Historique des matchs</p>
   <div id="matches-list"></div>
+  <div id="pagination">
+    <button class="page-btn" id="btn-prev" onclick="changePage(-1)" disabled>← Précédent</button>
+    <span id="page-info"></span>
+    <button class="page-btn" id="btn-next" onclick="changePage(1)">Suivant →</button>
+  </div>
 </main>
 
 <!-- Modal stats joueur -->
@@ -291,27 +318,46 @@
 
   // ── Matches ──────────────────────────────────────────────────────────────────
 
-  async function loadMatches() {
-    const { data } = await sb
+  const PER_PAGE = 10;
+  let currentPage = 0;
+
+  async function loadMatches(page = currentPage) {
+    const from = page * PER_PAGE;
+    const to   = from + PER_PAGE - 1;
+
+    const { data, count } = await sb
       .from('matches')
-      .select('id, format, winner_delta, played_at, winner:players!matches_winner_id_fkey(display_name), loser:players!matches_loser_id_fkey(display_name)')
+      .select('id, format, winner_delta, loser_delta, played_at, winner:players!matches_winner_id_fkey(display_name), loser:players!matches_loser_id_fkey(display_name)', { count: 'exact' })
       .order('played_at', { ascending: false })
-      .limit(15);
+      .range(from, to);
 
     const el = document.getElementById('matches-list');
     if (!data || data.length === 0) { el.innerHTML = '<p class="loading">Aucun match.</p>'; return; }
+
+    const totalPages = Math.ceil(count / PER_PAGE);
 
     el.innerHTML = data.map(m => {
       const date = new Date(m.played_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
       return `<div class="match-row">
         <span class="match-winner">🏆 ${escHtml(m.winner.display_name)}</span>
-        <span class="match-delta">+${m.winner_delta}</span>
+        <span class="match-delta" style="color:var(--green)">+${m.winner_delta}</span>
         <span class="match-vs">vs</span>
         <span class="match-loser">${escHtml(m.loser.display_name)}</span>
+        <span class="match-delta" style="color:var(--red)">${m.loser_delta}</span>
         <span class="match-meta">${m.format}pts · ${date}</span>
       </div>`;
     }).join('');
+
+    document.getElementById('page-info').textContent  = `${page + 1} / ${totalPages}`;
+    document.getElementById('btn-prev').disabled = page === 0;
+    document.getElementById('btn-next').disabled = page >= totalPages - 1;
   }
+
+  window.changePage = (dir) => {
+    currentPage += dir;
+    loadMatches(currentPage);
+    document.getElementById('matches-list').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   // ── Modal stats ──────────────────────────────────────────────────────────────
 
