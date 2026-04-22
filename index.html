@@ -127,6 +127,8 @@
     .match-loser  { color: var(--red); flex: 1; }
     .match-meta   { font-size: 0.72rem; color: var(--muted); margin-left: auto; white-space: nowrap; }
     .match-elo    { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+    .avatar       { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: var(--surface2); }
+    .avatar-sm    { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: var(--surface2); }
 
     /* ── Pagination ── */
     #pagination {
@@ -300,8 +302,8 @@
     const top3 = data.slice(0, 3);
     document.getElementById('podium').innerHTML = top3.map((p, i) => `
       <div class="podium-card p${i+1}" onclick="openModal('${p.id}', '${escHtml(p.display_name)}')">
-        <div class="podium-medal">${MEDALS[i]}</div>
-        <div class="podium-name">${escHtml(p.display_name)}</div>
+        ${p.avatar_url ? `<img class="avatar" style="width:44px;height:44px;margin:0 auto 8px" src="${p.avatar_url}" alt="">` : `<div class="podium-medal">${MEDALS[i]}</div>`}
+        <div class="podium-name">${MEDALS[i]} ${escHtml(p.display_name)}</div>
         <div class="podium-elo">${p.elo}</div>
         <div class="podium-record">${p.wins}V · ${p.losses}D · ${p.winrate}%</div>
       </div>`).join('');
@@ -310,6 +312,7 @@
     document.getElementById('leaderboard').innerHTML = data.slice(3).map(p => `
       <div class="player-row" onclick="openModal('${p.id}', '${escHtml(p.display_name)}')">
         <span class="player-rank">${p.rank}</span>
+        ${p.avatar_url ? `<img class="avatar-sm" src="${p.avatar_url}" alt="">` : ''}
         <span class="player-name">${escHtml(p.display_name)}</span>
         <span class="player-wr">${p.winrate}%</span>
         <span class="player-record">${p.wins}V / ${p.losses}D</span>
@@ -328,7 +331,7 @@
 
     const { data, count } = await sb
       .from('matches')
-      .select('id, format, winner_delta, loser_delta, winner_elo_before, loser_elo_before, played_at, winner:players!matches_winner_id_fkey(display_name), loser:players!matches_loser_id_fkey(display_name)', { count: 'exact' })
+      .select('id, format, winner_delta, loser_delta, winner_elo_before, loser_elo_before, played_at, winner:players!matches_winner_id_fkey(display_name, avatar_url), loser:players!matches_loser_id_fkey(display_name, avatar_url)', { count: 'exact' })
       .order('played_at', { ascending: false })
       .range(from, to);
 
@@ -343,11 +346,13 @@
       const lBefore = m.loser_elo_before;
       const wElo = wBefore != null ? `<span class="match-elo">${wBefore} → ${wBefore + m.winner_delta}</span>` : `<span class="match-delta" style="color:var(--green)">+${m.winner_delta}</span>`;
       const lElo = lBefore != null ? `<span class="match-elo">${lBefore} → ${lBefore + m.loser_delta}</span>` : `<span class="match-delta" style="color:var(--red)">${m.loser_delta}</span>`;
+      const wAvatar = m.winner.avatar_url ? `<img class="avatar-sm" src="${m.winner.avatar_url}" alt="">` : '';
+      const lAvatar = m.loser.avatar_url  ? `<img class="avatar-sm" src="${m.loser.avatar_url}"  alt="">` : '';
       return `<div class="match-row">
-        <span class="match-winner">🏆 ${escHtml(m.winner.display_name)}</span>
+        ${wAvatar}<span class="match-winner">🏆 ${escHtml(m.winner.display_name)}</span>
         ${wElo}
         <span class="match-vs">vs</span>
-        <span class="match-loser">${escHtml(m.loser.display_name)}</span>
+        ${lAvatar}<span class="match-loser">${escHtml(m.loser.display_name)}</span>
         ${lElo}
         <span class="match-meta">${m.format}pts · ${date}</span>
       </div>`;
@@ -367,7 +372,7 @@
   // ── Modal stats ──────────────────────────────────────────────────────────────
 
   window.openModal = async (playerId, name) => {
-    document.getElementById('modal-name').textContent = name;
+    document.getElementById('modal-name').innerHTML = name;
     document.getElementById('modal-content').innerHTML = '<p class="loading">Chargement...</p>';
     document.getElementById('modal-overlay').classList.add('open');
 
@@ -409,6 +414,11 @@
 
     // ELO history
     const allMatches = [...(wins ?? []).map(m => ({ ...m, won: true })), ...(losses ?? []).map(m => ({ ...m, won: false }))];
+
+    if (player.avatar_url) {
+      document.getElementById('modal-name').innerHTML =
+        `<img class="avatar" style="width:48px;height:48px;vertical-align:middle;margin-right:10px" src="${player.avatar_url}" alt="">${escHtml(name)}`;
+    }
 
     document.getElementById('modal-content').innerHTML = `
       <div class="stat-grid">
