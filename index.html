@@ -295,7 +295,7 @@
     if (eligible.length === 0) return null;
     return eligible.reduce((worst, p) => p.winrate < worst.winrate ? p : worst).id;
   }
-  function cow(id) { return vacheId && id === vacheId ? ' 🐄' : ''; }
+  function cow(id) { return vacheId && id === vacheId ? ' 🐮' : ''; }
 
   // ── Leaderboard ──────────────────────────────────────────────────────────────
 
