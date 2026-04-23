@@ -288,11 +288,22 @@
 
   const MEDALS = ['🥇', '🥈', '🥉'];
 
+  // ── Vache à lait ─────────────────────────────────────────────────────────────
+  let vacheId = null;
+  function computeVache(players) {
+    const eligible = players.filter(p => (p.wins + p.losses) >= 10);
+    if (eligible.length === 0) return null;
+    return eligible.reduce((worst, p) => p.winrate < worst.winrate ? p : worst).id;
+  }
+  function cow(id) { return vacheId && id === vacheId ? ' 🐄' : ''; }
+
   // ── Leaderboard ──────────────────────────────────────────────────────────────
 
   async function loadLeaderboard() {
     const { data } = await sb.from('leaderboard').select('*').order('rank');
     if (!data || data.length === 0) return;
+
+    vacheId = computeVache(data);
 
     const { count: totalMatches } = await sb.from('matches').select('*', { count: 'exact', head: true });
     document.getElementById('subtitle').textContent =
@@ -303,7 +314,7 @@
     document.getElementById('podium').innerHTML = top3.map((p, i) => `
       <div class="podium-card p${i+1}" onclick="openModal('${p.id}', '${escHtml(p.display_name)}')">
         ${p.avatar_url ? `<img class="avatar" style="width:44px;height:44px;margin:0 auto 8px" src="${p.avatar_url}" alt="">` : `<div class="podium-medal">${MEDALS[i]}</div>`}
-        <div class="podium-name">${MEDALS[i]} ${escHtml(p.display_name)}</div>
+        <div class="podium-name">${MEDALS[i]} ${escHtml(p.display_name)}${cow(p.id)}</div>
         <div class="podium-elo">${p.elo}</div>
         <div class="podium-record">${p.wins}V · ${p.losses}D · ${p.winrate}%</div>
       </div>`).join('');
@@ -313,7 +324,7 @@
       <div class="player-row" onclick="openModal('${p.id}', '${escHtml(p.display_name)}')">
         <span class="player-rank">${p.rank}</span>
         ${p.avatar_url ? `<img class="avatar-sm" src="${p.avatar_url}" alt="">` : ''}
-        <span class="player-name">${escHtml(p.display_name)}</span>
+        <span class="player-name">${escHtml(p.display_name)}${cow(p.id)}</span>
         <span class="player-wr">${p.winrate}%</span>
         <span class="player-record">${p.wins}V / ${p.losses}D</span>
         <span class="player-elo">${p.elo}</span>
@@ -331,7 +342,7 @@
 
     const { data, count } = await sb
       .from('matches')
-      .select('id, format, winner_delta, loser_delta, winner_elo_before, loser_elo_before, played_at, winner:players!matches_winner_id_fkey(display_name, avatar_url), loser:players!matches_loser_id_fkey(display_name, avatar_url)', { count: 'exact' })
+      .select('id, format, winner_id, loser_id, winner_delta, loser_delta, winner_elo_before, loser_elo_before, played_at, winner:players!matches_winner_id_fkey(display_name, avatar_url), loser:players!matches_loser_id_fkey(display_name, avatar_url)', { count: 'exact' })
       .order('played_at', { ascending: false })
       .range(from, to);
 
@@ -349,10 +360,10 @@
       const wAvatar = m.winner.avatar_url ? `<img class="avatar-sm" src="${m.winner.avatar_url}" alt="">` : '';
       const lAvatar = m.loser.avatar_url  ? `<img class="avatar-sm" src="${m.loser.avatar_url}"  alt="">` : '';
       return `<div class="match-row">
-        ${wAvatar}<span class="match-winner">🏆 ${escHtml(m.winner.display_name)}</span>
+        ${wAvatar}<span class="match-winner">🏆 ${escHtml(m.winner.display_name)}${cow(m.winner_id)}</span>
         ${wElo}
         <span class="match-vs">vs</span>
-        ${lAvatar}<span class="match-loser">${escHtml(m.loser.display_name)}</span>
+        ${lAvatar}<span class="match-loser">${escHtml(m.loser.display_name)}${cow(m.loser_id)}</span>
         ${lElo}
         <span class="match-meta">${m.format}pts · ${date}</span>
       </div>`;
@@ -415,10 +426,8 @@
     // ELO history
     const allMatches = [...(wins ?? []).map(m => ({ ...m, won: true })), ...(losses ?? []).map(m => ({ ...m, won: false }))];
 
-    if (player.avatar_url) {
-      document.getElementById('modal-name').innerHTML =
-        `<img class="avatar" style="width:48px;height:48px;vertical-align:middle;margin-right:10px" src="${player.avatar_url}" alt="">${escHtml(name)}`;
-    }
+    document.getElementById('modal-name').innerHTML =
+      `${player.avatar_url ? `<img class="avatar" style="width:48px;height:48px;vertical-align:middle;margin-right:10px" src="${player.avatar_url}" alt="">` : ''}${escHtml(name)}${cow(playerId)}`;
 
     document.getElementById('modal-content').innerHTML = `
       <div class="stat-grid">
