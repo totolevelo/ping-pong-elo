@@ -407,19 +407,24 @@
   function cow(id) { return vacheId && id === vacheId ? ' 🐮🥛' : ''; }
 
   // ── Tabs ──────────────────────────────────────────────────────────────────────
-  window.switchTab = (name, btn) => {
+  function setActiveTab(name) {
     document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('tab-' + name).classList.add('active');
-    btn.classList.add('active');
-    if (name === 'graph' && !chartInstance) loadGraph();
+    document.getElementById('tab-' + name)?.classList.add('active');
+    document.querySelectorAll('.tab-btn').forEach(b => {
+      if (b.getAttribute('onclick')?.includes(`'${name}'`)) b.classList.add('active');
+    });
+  }
+
+  window.switchTab = (name, btn) => {
+    setActiveTab(name);
     history.replaceState(null, '', '#' + name);
+    if (name === 'graph' && !chartInstance) loadGraph();
   };
 
-  // Activer le bon onglet selon le hash à l'arrivée
+  // Activer le bon onglet visuellement dès le départ
   const initTab = location.hash.replace('#', '') || 'classement';
-  const initBtn = [...document.querySelectorAll('.tab-btn')].find(b => b.getAttribute('onclick').includes(`'${initTab}'`));
-  if (initBtn) switchTab(initTab, initBtn);
+  setActiveTab(initTab);
 
   // ── Leaderboard ──────────────────────────────────────────────────────────────
 
@@ -735,7 +740,9 @@
   }
 
   // ── Init ─────────────────────────────────────────────────────────────────────
-  loadLeaderboard();
+  loadLeaderboard().then(() => {
+    if (initTab === 'graph' && !chartInstance) loadGraph();
+  });
   loadMatches();
   setInterval(() => { loadLeaderboard(); loadMatches(); }, 30_000);
 </script>
