@@ -507,7 +507,7 @@
 
   async function loadGraph() {
     const [{ data: players }, { data: snaps }] = await Promise.all([
-      sb.from('leaderboard').select('id, display_name, avatar_url').order('rank'),
+      sb.from('players').select('id, display_name, avatar_url').order('elo', { ascending: false }),
       sb.from('elo_snapshots').select('player_id, elo, date').order('date'),
     ]);
 
