@@ -511,20 +511,20 @@
       sb.from('elo_snapshots').select('player_id, elo, date').order('date'),
     ]);
 
-    if (!players || !snaps) return;
+    if (!players) return;
 
     allPlayers = players;
     checkedPlayers = new Set(players.map(p => p.id));
 
     // Regrouper les snapshots par joueur
     snapshotsByPlayer = {};
-    for (const s of snaps) {
+    for (const s of snaps ?? []) {
       if (!snapshotsByPlayer[s.player_id]) snapshotsByPlayer[s.player_id] = {};
       snapshotsByPlayer[s.player_id][s.date] = s.elo;
     }
 
     // Toutes les dates uniques triées
-    allDates = [...new Set(snaps.map(s => s.date))].sort();
+    allDates = [...new Set((snaps ?? []).map(s => s.date))].sort();
 
     // Checkboxes
     document.getElementById('player-checkboxes').innerHTML = players.map((p, i) => {
