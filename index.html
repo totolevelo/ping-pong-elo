@@ -33,12 +33,36 @@
     header {
       background: linear-gradient(135deg, #1a1030 0%, #0c0c12 60%);
       border-bottom: 1px solid var(--border);
-      padding: 28px 24px 24px;
+      padding: 28px 24px 0;
       text-align: center;
     }
     header h1 { font-size: 2rem; font-weight: 800; letter-spacing: -0.5px; }
     header h1 span { color: var(--accent); }
     #subtitle { margin-top: 6px; font-size: 0.85rem; color: var(--muted); }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      justify-content: center;
+      gap: 4px;
+      margin-top: 20px;
+    }
+    .tab-btn {
+      padding: 10px 24px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
 
     /* ── Layout ── */
     main {
@@ -233,19 +257,75 @@
 
     .loading { color: var(--muted); padding: 8px 0; font-size: 0.88rem; }
 
-    /* ── ELO history ── */
-    #elo-chart {
-      margin-top: 16px;
-      background: var(--surface2);
-      border-radius: 10px;
-      padding: 12px;
+    /* ── Graph tab ── */
+    #graph-controls {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
     }
-    #elo-chart canvas { width: 100%; display: block; }
-    #elo-chart .chart-label {
-      font-size: 0.7rem;
+    #graph-controls .controls-title {
+      font-size: 0.75rem;
+      font-weight: 600;
       color: var(--muted);
-      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
     }
+    #player-checkboxes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .player-check {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 0.82rem;
+      font-weight: 600;
+      transition: border-color 0.15s, background 0.15s;
+      user-select: none;
+    }
+    .player-check:hover { background: #22223a; }
+    .player-check.checked { border-color: var(--color, var(--accent)); background: color-mix(in srgb, var(--color, var(--accent)) 15%, var(--surface2)); }
+    .player-check input { display: none; }
+    .player-check .check-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--color, var(--accent));
+      opacity: 0.3;
+      transition: opacity 0.15s;
+    }
+    .player-check.checked .check-dot { opacity: 1; }
+
+    #chart-container {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      position: relative;
+      height: 420px;
+    }
+    #chart-container canvas { max-height: 100%; }
+
+    .btn-toggle-all {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 4px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      float: right;
+      margin-top: -2px;
+    }
+    .btn-toggle-all:hover { color: var(--text); }
   </style>
 </head>
 <body>
@@ -253,21 +333,44 @@
 <header>
   <h1>🏓 Ping Pong <span>ELO</span></h1>
   <p id="subtitle">Chargement...</p>
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('classement', this)">🏆 Classement</button>
+    <button class="tab-btn" onclick="switchTab('graph', this)">📈 Graphique ELO</button>
+  </div>
 </header>
 
 <main>
-  <div id="podium"></div>
 
-  <p class="section-title">Classement complet</p>
-  <div id="leaderboard"></div>
+  <!-- ── Onglet Classement ── -->
+  <div id="tab-classement" class="tab-pane active">
+    <div id="podium"></div>
 
-  <p class="section-title">Historique des matchs</p>
-  <div id="matches-list"></div>
-  <div id="pagination">
-    <button class="page-btn" id="btn-prev" onclick="changePage(-1)" disabled>← Précédent</button>
-    <span id="page-info"></span>
-    <button class="page-btn" id="btn-next" onclick="changePage(1)">Suivant →</button>
+    <p class="section-title">Classement complet</p>
+    <div id="leaderboard"></div>
+
+    <p class="section-title">Historique des matchs</p>
+    <div id="matches-list"></div>
+    <div id="pagination">
+      <button class="page-btn" id="btn-prev" onclick="changePage(-1)" disabled>← Précédent</button>
+      <span id="page-info"></span>
+      <button class="page-btn" id="btn-next" onclick="changePage(1)">Suivant →</button>
+    </div>
   </div>
+
+  <!-- ── Onglet Graphique ── -->
+  <div id="tab-graph" class="tab-pane">
+    <div id="graph-controls">
+      <div class="controls-title">
+        Joueurs
+        <button class="btn-toggle-all" onclick="toggleAllPlayers()">Tout cocher / décocher</button>
+      </div>
+      <div id="player-checkboxes"><p class="loading">Chargement...</p></div>
+    </div>
+    <div id="chart-container">
+      <canvas id="elo-chart-canvas"></canvas>
+    </div>
+  </div>
+
 </main>
 
 <!-- Modal stats joueur -->
@@ -279,6 +382,7 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script type="module">
   import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
@@ -287,6 +391,10 @@
   const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   const MEDALS = ['🥇', '🥈', '🥉'];
+  const CHART_COLORS = [
+    '#7c6af0','#4ade80','#f87171','#fbbf24','#60a5fa',
+    '#f472b6','#34d399','#fb923c','#a78bfa','#38bdf8','#e879f9','#84cc16',
+  ];
 
   // ── Vache à lait ─────────────────────────────────────────────────────────────
   let vacheId = null;
@@ -296,6 +404,15 @@
     return eligible.reduce((worst, p) => p.winrate < worst.winrate ? p : worst).id;
   }
   function cow(id) { return vacheId && id === vacheId ? ' 🐮🥛' : ''; }
+
+  // ── Tabs ──────────────────────────────────────────────────────────────────────
+  window.switchTab = (name, btn) => {
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    btn.classList.add('active');
+    if (name === 'graph' && !chartInstance) loadGraph();
+  };
 
   // ── Leaderboard ──────────────────────────────────────────────────────────────
 
@@ -352,11 +469,11 @@
     const totalPages = Math.ceil(count / PER_PAGE);
 
     el.innerHTML = data.map(m => {
-      const date = new Date(m.played_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const date    = new Date(m.played_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
       const wBefore = m.winner_elo_before;
       const lBefore = m.loser_elo_before;
-      const wElo = wBefore != null ? `<span class="match-elo">${wBefore} → ${wBefore + m.winner_delta}</span>` : `<span class="match-delta" style="color:var(--green)">+${m.winner_delta}</span>`;
-      const lElo = lBefore != null ? `<span class="match-elo">${lBefore} → ${lBefore + m.loser_delta}</span>` : `<span class="match-delta" style="color:var(--red)">${m.loser_delta}</span>`;
+      const wElo    = wBefore != null ? `<span class="match-elo">${wBefore} → ${wBefore + m.winner_delta}</span>` : `<span class="match-delta" style="color:var(--green)">+${m.winner_delta}</span>`;
+      const lElo    = lBefore != null ? `<span class="match-elo">${lBefore} → ${lBefore + m.loser_delta}</span>` : `<span class="match-delta" style="color:var(--red)">${m.loser_delta}</span>`;
       const wAvatar = m.winner.avatar_url ? `<img class="avatar-sm" src="${m.winner.avatar_url}" alt="">` : '';
       const lAvatar = m.loser.avatar_url  ? `<img class="avatar-sm" src="${m.loser.avatar_url}"  alt="">` : '';
       return `<div class="match-row">
@@ -380,6 +497,144 @@
     document.getElementById('matches-list').scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  // ── Graph ─────────────────────────────────────────────────────────────────────
+
+  let chartInstance   = null;
+  let allPlayers      = [];
+  let checkedPlayers  = new Set();
+  let snapshotsByPlayer = {};
+  let allDates        = [];
+
+  async function loadGraph() {
+    const [{ data: players }, { data: snaps }] = await Promise.all([
+      sb.from('leaderboard').select('id, display_name, avatar_url').order('rank'),
+      sb.from('elo_snapshots').select('player_id, elo, date').order('date'),
+    ]);
+
+    if (!players || !snaps) return;
+
+    allPlayers = players;
+    checkedPlayers = new Set(players.map(p => p.id));
+
+    // Regrouper les snapshots par joueur
+    snapshotsByPlayer = {};
+    for (const s of snaps) {
+      if (!snapshotsByPlayer[s.player_id]) snapshotsByPlayer[s.player_id] = {};
+      snapshotsByPlayer[s.player_id][s.date] = s.elo;
+    }
+
+    // Toutes les dates uniques triées
+    allDates = [...new Set(snaps.map(s => s.date))].sort();
+
+    // Checkboxes
+    document.getElementById('player-checkboxes').innerHTML = players.map((p, i) => {
+      const color = CHART_COLORS[i % CHART_COLORS.length];
+      return `<label class="player-check checked" style="--color:${color}" id="chk-${p.id}">
+        <input type="checkbox" checked onchange="togglePlayer('${p.id}', this)">
+        <span class="check-dot"></span>
+        ${p.avatar_url ? `<img class="avatar-sm" src="${p.avatar_url}" alt="">` : ''}
+        ${escHtml(p.display_name)}${cow(p.id)}
+      </label>`;
+    }).join('');
+
+    renderChart();
+  }
+
+  window.togglePlayer = (id, checkbox) => {
+    if (checkbox.checked) checkedPlayers.add(id);
+    else checkedPlayers.delete(id);
+    const label = document.getElementById('chk-' + id);
+    if (label) label.classList.toggle('checked', checkbox.checked);
+    renderChart();
+  };
+
+  window.toggleAllPlayers = () => {
+    const allChecked = checkedPlayers.size === allPlayers.length;
+    allPlayers.forEach((p, i) => {
+      const label    = document.getElementById('chk-' + p.id);
+      const checkbox = label?.querySelector('input');
+      const check    = !allChecked;
+      if (checkbox) checkbox.checked = check;
+      if (label) label.classList.toggle('checked', check);
+      if (check) checkedPlayers.add(p.id);
+      else checkedPlayers.delete(p.id);
+    });
+    renderChart();
+  };
+
+  function renderChart() {
+    const ctx = document.getElementById('elo-chart-canvas').getContext('2d');
+
+    const labels   = allDates.map(d => {
+      const [y, m, day] = d.split('-');
+      return `${day}/${m}`;
+    });
+
+    const datasets = allPlayers
+      .filter(p => checkedPlayers.has(p.id))
+      .map((p, idx) => {
+        const color   = CHART_COLORS[allPlayers.indexOf(p) % CHART_COLORS.length];
+        const snapMap = snapshotsByPlayer[p.id] ?? {};
+        let lastElo   = null;
+        const dataPoints = allDates.map(d => {
+          if (snapMap[d] !== undefined) lastElo = snapMap[d];
+          return lastElo;
+        });
+        return {
+          label:           p.display_name + cow(p.id),
+          data:            dataPoints,
+          borderColor:     color,
+          backgroundColor: color + '22',
+          borderWidth:     2,
+          pointRadius:     3,
+          pointHoverRadius:6,
+          tension:         0.3,
+          spanGaps:        true,
+        };
+      });
+
+    if (chartInstance) {
+      chartInstance.data.labels   = labels;
+      chartInstance.data.datasets = datasets;
+      chartInstance.update();
+      return;
+    }
+
+    chartInstance = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive:          true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#1c1c2a',
+            borderColor:     '#2a2a3a',
+            borderWidth:     1,
+            titleColor:      '#e8e8f0',
+            bodyColor:       '#9ca3af',
+            padding:         10,
+            callbacks: {
+              label: ctx => ` ${ctx.dataset.label}  ${ctx.parsed.y} ELO`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            grid:  { color: '#2a2a3a' },
+            ticks: { color: '#666680', font: { size: 11 } },
+          },
+          y: {
+            grid:  { color: '#2a2a3a' },
+            ticks: { color: '#666680', font: { size: 11 } },
+          },
+        },
+      },
+    });
+  }
+
   // ── Modal stats ──────────────────────────────────────────────────────────────
 
   window.openModal = async (playerId, name) => {
@@ -397,7 +652,6 @@
     const total   = player.wins + player.losses;
     const winrate = total > 0 ? Math.round(player.wins / total * 100) : 0;
 
-    // Top1 days
     const top1Days = (top1 ?? []).reduce((sum, r) => {
       const s = new Date(r.started_at).getTime();
       const e = r.ended_at ? new Date(r.ended_at).getTime() : Date.now();
@@ -405,7 +659,6 @@
     }, 0);
     const days = Math.floor(top1Days / 86400000);
 
-    // Bête noire
     const lossMap = {};
     for (const m of losses ?? []) {
       const k = m.winner_id;
@@ -414,7 +667,6 @@
     }
     const beteNoire = Object.values(lossMap).sort((a, b) => b.count - a.count)[0];
 
-    // Victime
     const winMap = {};
     for (const m of wins ?? []) {
       const k = m.loser_id;
@@ -422,9 +674,6 @@
       winMap[k].count++;
     }
     const victime = Object.values(winMap).sort((a, b) => b.count - a.count)[0];
-
-    // ELO history
-    const allMatches = [...(wins ?? []).map(m => ({ ...m, won: true })), ...(losses ?? []).map(m => ({ ...m, won: false }))];
 
     document.getElementById('modal-name').innerHTML =
       `${player.avatar_url ? `<img class="avatar" style="width:48px;height:48px;vertical-align:middle;margin-right:10px" src="${player.avatar_url}" alt="">` : ''}${escHtml(name)}${cow(playerId)}`;
