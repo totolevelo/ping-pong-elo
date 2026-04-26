@@ -391,6 +391,7 @@
   const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   const MEDALS = ['🥇', '🥈', '🥉'];
+  const PLACEMENT_THRESHOLD = 5;
   const CHART_COLORS = [
     '#7c6af0','#4ade80','#f87171','#fbbf24','#60a5fa',
     '#f472b6','#34d399','#fb923c','#a78bfa','#38bdf8','#e879f9','#84cc16',
@@ -422,12 +423,15 @@
 
     vacheId = computeVache(data);
 
+    const ranked     = data.filter(p => (p.wins + p.losses) >= PLACEMENT_THRESHOLD);
+    const placements = data.filter(p => (p.wins + p.losses) <  PLACEMENT_THRESHOLD);
+
     const { count: totalMatches } = await sb.from('matches').select('*', { count: 'exact', head: true });
     document.getElementById('subtitle').textContent =
-      `${data.length} joueurs · ${totalMatches ?? 0} matchs joués`;
+      `${ranked.length} joueurs classés · ${totalMatches ?? 0} matchs joués`;
 
     // Podium top 3
-    const top3 = data.slice(0, 3);
+    const top3 = ranked.slice(0, 3);
     document.getElementById('podium').innerHTML = top3.map((p, i) => `
       <div class="podium-card p${i+1}" onclick="openModal('${p.id}', '${escHtml(p.display_name)}')">
         ${p.avatar_url ? `<img class="avatar" style="width:44px;height:44px;margin:0 auto 8px" src="${p.avatar_url}" alt="">` : `<div class="podium-medal">${MEDALS[i]}</div>`}
@@ -437,7 +441,7 @@
       </div>`).join('');
 
     // Full list (rank 4+)
-    document.getElementById('leaderboard').innerHTML = data.slice(3).map(p => `
+    document.getElementById('leaderboard').innerHTML = ranked.slice(3).map(p => `
       <div class="player-row" onclick="openModal('${p.id}', '${escHtml(p.display_name)}')">
         <span class="player-rank">${p.rank}</span>
         ${p.avatar_url ? `<img class="avatar-sm" src="${p.avatar_url}" alt="">` : ''}
@@ -445,7 +449,19 @@
         <span class="player-wr">${p.winrate}%</span>
         <span class="player-record">${p.wins}V / ${p.losses}D</span>
         <span class="player-elo">${p.elo}</span>
-      </div>`).join('') || '<p class="loading">Seulement 3 joueurs ou moins.</p>';
+      </div>`).join('') || '';
+
+    // Joueurs en placement
+    if (placements.length > 0) {
+      document.getElementById('leaderboard').innerHTML += `
+        <p class="section-title" style="margin-top:24px">🎯 En placement</p>
+        ${placements.map(p => `
+        <div class="player-row" onclick="openModal('${p.id}', '${escHtml(p.display_name)}')">
+          ${p.avatar_url ? `<img class="avatar-sm" src="${p.avatar_url}" alt="">` : ''}
+          <span class="player-name" style="color:var(--muted)">${escHtml(p.display_name)}</span>
+          <span style="font-size:0.78rem;color:var(--muted);margin-left:auto">${p.wins + p.losses}/${PLACEMENT_THRESHOLD} parties</span>
+        </div>`).join('')}`;
+    }
   }
 
   // ── Matches ──────────────────────────────────────────────────────────────────
