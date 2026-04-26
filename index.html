@@ -413,7 +413,13 @@
     document.getElementById('tab-' + name).classList.add('active');
     btn.classList.add('active');
     if (name === 'graph' && !chartInstance) loadGraph();
+    history.replaceState(null, '', '#' + name);
   };
+
+  // Activer le bon onglet selon le hash à l'arrivée
+  const initTab = location.hash.replace('#', '') || 'classement';
+  const initBtn = [...document.querySelectorAll('.tab-btn')].find(b => b.getAttribute('onclick').includes(`'${initTab}'`));
+  if (initBtn) switchTab(initTab, initBtn);
 
   // ── Leaderboard ──────────────────────────────────────────────────────────────
 
