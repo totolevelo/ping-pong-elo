@@ -452,9 +452,9 @@
       </div>`).join('');
 
     // Full list (rank 4+)
-    document.getElementById('leaderboard').innerHTML = ranked.slice(3).map(p => `
+    document.getElementById('leaderboard').innerHTML = ranked.slice(3).map((p, i) => `
       <div class="player-row" onclick="openModal('${p.id}', '${escHtml(p.display_name)}')">
-        <span class="player-rank">${p.rank}</span>
+        <span class="player-rank">${i + 4}</span>
         ${p.avatar_url ? `<img class="avatar-sm" src="${p.avatar_url}" alt="">` : ''}
         <span class="player-name">${escHtml(p.display_name)}${cow(p.id)}</span>
         <span class="player-wr">${p.winrate}%</span>
