@@ -18,6 +18,10 @@
       --gold:     #f59e0b;
       --silver:   #9ca3af;
       --bronze:   #b45309;
+      /* Couleurs du podium — modifiables facilement */
+      --rank1:    #ffd24a;
+      --rank2:    #cdd3dc;
+      --rank3:    #e8915a;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -93,12 +97,23 @@
       position: relative;
     }
     .podium-card:hover { transform: translateY(-4px); }
-    .podium-card.p1 { border-color: #f59e0b55; order: 2; padding-top: 24px; }
-    .podium-card.p2 { border-color: #9ca3af44; order: 1; }
-    .podium-card.p3 { border-color: #b4530944; order: 3; }
+    .podium-card.p1 {
+      order: 2; padding-top: 26px;
+      border-color: var(--rank1);
+      background: linear-gradient(180deg, rgba(255,210,74,0.10) 0%, var(--surface) 55%);
+      box-shadow: 0 0 28px -8px rgba(255,210,74,0.5);
+      transform: translateY(-6px);
+    }
+    .podium-card.p1:hover { transform: translateY(-10px); }
+    .podium-card.p2 { border-color: var(--rank2)66; order: 1; }
+    .podium-card.p3 { border-color: var(--rank3)55; order: 3; }
 
     .podium-medal { font-size: 1.8rem; margin-bottom: 8px; }
     .podium-name  { font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .podium-card.p1 .podium-name { color: var(--rank1); text-shadow: 0 0 10px rgba(255,210,74,0.4); font-size: 1rem; }
+    .podium-card.p2 .podium-name { color: var(--rank2); }
+    .podium-card.p3 .podium-name { color: var(--rank3); }
+    .podium-card.p1 .podium-elo  { font-size: 1.6rem; color: var(--rank1); }
     .podium-elo   { font-size: 1.4rem; font-weight: 800; color: var(--accent); }
     .podium-record{ font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
 
@@ -153,6 +168,20 @@
     .match-elo    { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
     .avatar       { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: var(--surface2); }
     .avatar-sm    { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: var(--surface2); }
+
+    /* ── Recherche matchs ── */
+    #match-search {
+      width: 100%;
+      padding: 9px 14px;
+      margin-bottom: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.88rem;
+    }
+    #match-search:focus { outline: none; border-color: var(--accent); }
+    #match-search::placeholder { color: var(--muted); }
 
     /* ── Pagination ── */
     #pagination {
@@ -349,6 +378,7 @@
     <div id="leaderboard"></div>
 
     <p class="section-title">Historique des matchs</p>
+    <input id="match-search" placeholder="🔍 Rechercher un joueur..." autocomplete="off" />
     <div id="matches-list"></div>
     <div id="pagination">
       <button class="page-btn" id="btn-prev" onclick="changePage(-1)" disabled>← Précédent</button>
@@ -479,18 +509,33 @@
 
   const PER_PAGE = 10;
   let currentPage = 0;
+  let searchIds   = null; // null = pas de filtre ; [] = aucun joueur trouvé
 
   async function loadMatches(page = currentPage) {
     const from = page * PER_PAGE;
     const to   = from + PER_PAGE - 1;
+    const el   = document.getElementById('matches-list');
 
-    const { data, count } = await sb
+    if (searchIds !== null && searchIds.length === 0) {
+      el.innerHTML = '<p class="loading">Aucun joueur trouvé.</p>';
+      document.getElementById('page-info').textContent = '';
+      document.getElementById('btn-prev').disabled = true;
+      document.getElementById('btn-next').disabled = true;
+      return;
+    }
+
+    let query = sb
       .from('matches')
       .select('id, format, winner_id, loser_id, winner_delta, loser_delta, winner_elo_before, loser_elo_before, played_at, winner:players!matches_winner_id_fkey(display_name, avatar_url), loser:players!matches_loser_id_fkey(display_name, avatar_url)', { count: 'exact' })
-      .order('played_at', { ascending: false })
-      .range(from, to);
+      .order('played_at', { ascending: false });
 
-    const el = document.getElementById('matches-list');
+    if (searchIds !== null) {
+      const list = searchIds.map(id => `"${id}"`).join(',');
+      query = query.or(`winner_id.in.(${list}),loser_id.in.(${list})`);
+    }
+
+    const { data, count } = await query.range(from, to);
+
     if (!data || data.length === 0) { el.innerHTML = '<p class="loading">Aucun match.</p>'; return; }
 
     const totalPages = Math.ceil(count / PER_PAGE);
@@ -524,6 +569,20 @@
     document.getElementById('matches-list').scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  // Recherche par joueur
+  let searchTimer;
+  document.getElementById('match-search').addEventListener('input', (e) => {
+    clearTimeout(searchTimer);
+    const q = e.target.value.trim();
+    searchTimer = setTimeout(async () => {
+      if (!q) { searchIds = null; currentPage = 0; loadMatches(0); return; }
+      const { data: pls } = await sb.from('players').select('id').ilike('display_name', `%${q}%`);
+      searchIds = (pls ?? []).map(p => p.id);
+      currentPage = 0;
+      loadMatches(0);
+    }, 250);
+  });
+
   // ── Graph ─────────────────────────────────────────────────────────────────────
 
   let chartInstance   = null;
@@ -532,16 +591,28 @@
   let snapshotsByPlayer = {};
   let allDates        = [];
 
+  const INACTIVE_DAYS = 14;
+
   async function loadGraph() {
-    const [{ data: players }, { data: snaps }] = await Promise.all([
+    const [{ data: players }, { data: snaps }, { data: recent }] = await Promise.all([
       sb.from('players').select('id, display_name, avatar_url').order('elo', { ascending: false }),
       sb.from('elo_snapshots').select('player_id, elo, date').order('date'),
+      sb.from('matches').select('winner_id, loser_id, played_at').order('played_at', { ascending: false }),
     ]);
 
     if (!players) return;
 
-    allPlayers = players;
-    checkedPlayers = new Set(players.map(p => p.id));
+    // Dernière activité par joueur (dernier match joué)
+    const lastPlayed = {};
+    for (const m of recent ?? []) {
+      if (!lastPlayed[m.winner_id]) lastPlayed[m.winner_id] = m.played_at;
+      if (!lastPlayed[m.loser_id])  lastPlayed[m.loser_id]  = m.played_at;
+    }
+    const cutoff = Date.now() - INACTIVE_DAYS * 86400000;
+
+    // On ne garde que les joueurs actifs (match dans les 14 derniers jours)
+    allPlayers = players.filter(p => lastPlayed[p.id] && new Date(lastPlayed[p.id]).getTime() >= cutoff);
+    checkedPlayers = new Set(allPlayers.map(p => p.id));
 
     // Regrouper les snapshots par joueur
     snapshotsByPlayer = {};
@@ -553,8 +624,8 @@
     // Toutes les dates uniques triées
     allDates = [...new Set((snaps ?? []).map(s => s.date))].sort();
 
-    // Checkboxes
-    document.getElementById('player-checkboxes').innerHTML = players.map((p, i) => {
+    // Checkboxes (joueurs actifs uniquement)
+    document.getElementById('player-checkboxes').innerHTML = allPlayers.map((p, i) => {
       const color = CHART_COLORS[i % CHART_COLORS.length];
       return `<label class="player-check checked" style="--color:${color}" id="chk-${p.id}">
         <input type="checkbox" checked onchange="togglePlayer('${p.id}', this)">
@@ -633,18 +704,22 @@
       options: {
         responsive:          true,
         maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
+        interaction: { mode: 'nearest', axis: 'xy', intersect: false },
         plugins: {
           legend: { display: false },
           tooltip: {
+            mode:            'nearest',
+            axis:            'xy',
+            intersect:       false,
             backgroundColor: '#1c1c2a',
             borderColor:     '#2a2a3a',
             borderWidth:     1,
             titleColor:      '#e8e8f0',
             bodyColor:       '#9ca3af',
             padding:         10,
+            displayColors:   true,
             callbacks: {
-              label: ctx => ` ${ctx.dataset.label}  ${ctx.parsed.y} ELO`,
+              label: ctx => ` ${ctx.dataset.label} — ${ctx.parsed.y} ELO`,
             },
           },
         },
@@ -660,6 +735,8 @@
         },
       },
     });
+    // Re-mesure au frame suivant (sécurité si le conteneur n'était pas encore dimensionné)
+    requestAnimationFrame(() => chartInstance && chartInstance.resize());
   }
 
   // ── Modal stats ──────────────────────────────────────────────────────────────
