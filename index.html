@@ -340,6 +340,15 @@
       flex-wrap: wrap;
       gap: 8px;
     }
+    .chk-group {
+      width: 100%;
+      flex-basis: 100%;
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 10px 0 2px;
+    }
     .player-check {
       display: flex;
       align-items: center;
@@ -830,9 +839,12 @@
     const refTime = viewedSeason.ended_at ? new Date(viewedSeason.ended_at).getTime() : Date.now();
     const cutoff  = refTime - INACTIVE_DAYS * 86400000;
 
-    // On ne garde que les joueurs actifs (match dans les 14 derniers jours de la saison)
-    allPlayers = players.filter(p => lastPlayed[p.id] && new Date(lastPlayed[p.id]).getTime() >= cutoff);
-    checkedPlayers = new Set(allPlayers.map(p => p.id));
+    // Tous les joueurs restent disponibles ; les inactifs (+14j) sont juste décochés par défaut
+    allPlayers = players;
+    const activeIds = new Set(
+      players.filter(p => lastPlayed[p.id] && new Date(lastPlayed[p.id]).getTime() >= cutoff).map(p => p.id)
+    );
+    checkedPlayers = new Set(activeIds);
 
     // Regrouper les snapshots par joueur
     snapshotsByPlayer = {};
@@ -844,16 +856,24 @@
     // Toutes les dates uniques triées
     allDates = [...new Set((snaps ?? []).map(s => s.date))].sort();
 
-    // Checkboxes (joueurs actifs uniquement)
-    document.getElementById('player-checkboxes').innerHTML = allPlayers.map((p, i) => {
-      const color = CHART_COLORS[i % CHART_COLORS.length];
-      return `<label class="player-check checked" style="--color:${color}" id="chk-${p.id}">
-        <input type="checkbox" checked onchange="togglePlayer('${p.id}', this)">
+    // Checkboxes : actifs (cochés) puis inactifs (décochés, sous un séparateur)
+    const chkHtml = (p) => {
+      const color   = CHART_COLORS[allPlayers.indexOf(p) % CHART_COLORS.length];
+      const checked = checkedPlayers.has(p.id);
+      return `<label class="player-check${checked ? ' checked' : ''}" style="--color:${color}" id="chk-${p.id}">
+        <input type="checkbox" ${checked ? 'checked' : ''} onchange="togglePlayer('${p.id}', this)">
         <span class="check-dot"></span>
         ${p.avatar_url ? `<img class="avatar-sm" src="${p.avatar_url}" alt="">` : ''}
         ${escHtml(p.display_name)}${cow(p.id)}
       </label>`;
-    }).join('');
+    };
+    const actives   = allPlayers.filter(p => activeIds.has(p.id));
+    const inactives = allPlayers.filter(p => !activeIds.has(p.id));
+    let chkBox = actives.map(chkHtml).join('');
+    if (inactives.length) {
+      chkBox += `<div class="chk-group">💤 Inactifs (+14j) — décochés</div>` + inactives.map(chkHtml).join('');
+    }
+    document.getElementById('player-checkboxes').innerHTML = chkBox;
 
     renderChart();
   }
