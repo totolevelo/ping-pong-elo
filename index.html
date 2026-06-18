@@ -44,6 +44,39 @@
     header h1 span { color: var(--accent); }
     #subtitle { margin-top: 6px; font-size: 0.85rem; color: var(--muted); }
 
+    #season-select {
+      margin-top: 12px;
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #season-select:focus { outline: none; border-color: var(--accent); }
+
+    /* ── Badges ── */
+    #badges {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 10px;
+    }
+    .badge-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+    }
+    .badge-card .b-icon  { font-size: 1.6rem; flex-shrink: 0; }
+    .badge-card .b-label { font-size: 0.66rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .badge-card .b-name  { font-weight: 700; font-size: 0.9rem; margin: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .badge-card .b-detail{ font-size: 0.72rem; color: var(--muted); }
+
     /* ── Tabs ── */
     .tabs {
       display: flex;
@@ -362,6 +395,7 @@
 <header>
   <h1>🏓 Ping Pong <span>ELO</span></h1>
   <p id="subtitle">Chargement...</p>
+  <select id="season-select" onchange="onSeasonChange()"></select>
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('classement', this)">🏆 Classement</button>
     <button class="tab-btn" onclick="switchTab('graph', this)">📈 Graphique ELO</button>
@@ -373,6 +407,11 @@
   <!-- ── Onglet Classement ── -->
   <div id="tab-classement" class="tab-pane active">
     <div id="podium"></div>
+
+    <div id="badges-section" style="display:none">
+      <p class="section-title">🏅 Palmarès de la saison</p>
+      <div id="badges"></div>
+    </div>
 
     <p class="section-title">Classement complet</p>
     <div id="leaderboard"></div>
@@ -436,6 +475,47 @@
   }
   function cow(id) { return vacheId && id === vacheId ? ' 🐮🥛' : ''; }
 
+  // ── Saisons ─────────────────────────────────────────────────────────────────
+  let SEASONS      = [];
+  let viewedSeason = null;
+
+  async function loadSeasons() {
+    const { data } = await sb.from('seasons').select('*').order('id', { ascending: false });
+    SEASONS = data ?? [];
+    if (SEASONS.length === 0) {
+      // Pas de table seasons : on simule une saison courante unique
+      SEASONS = [{ id: 1, label: 'Saison 1', started_at: '2000-01-01', ended_at: null }];
+    }
+    viewedSeason = SEASONS[0];
+    const sel = document.getElementById('season-select');
+    sel.innerHTML = SEASONS.map(s =>
+      `<option value="${s.id}">${escHtml(s.label)}${s.ended_at ? '' : ' (en cours)'}</option>`).join('');
+    sel.value = viewedSeason.id;
+    sel.style.display = SEASONS.length > 1 ? '' : 'none';
+  }
+
+  const isCurrentSeason = () => viewedSeason && !viewedSeason.ended_at;
+
+  // Applique le filtre de date de la saison sur une requête `matches`
+  function seasonFilterMatches(query) {
+    if (!viewedSeason) return query;
+    query = query.gte('played_at', viewedSeason.started_at);
+    if (viewedSeason.ended_at) query = query.lt('played_at', viewedSeason.ended_at);
+    return query;
+  }
+
+  window.onSeasonChange = () => {
+    const id = document.getElementById('season-select').value;
+    viewedSeason = SEASONS.find(s => String(s.id) === String(id)) ?? SEASONS[0];
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+    currentPage = 0;
+    searchIds = null;
+    document.getElementById('match-search').value = '';
+    loadLeaderboard();
+    loadMatches(0);
+    if (document.getElementById('tab-graph').classList.contains('active')) loadGraph();
+  };
+
   // ── Tabs ──────────────────────────────────────────────────────────────────────
   function setActiveTab(name) {
     document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
@@ -459,17 +539,39 @@
   // ── Leaderboard ──────────────────────────────────────────────────────────────
 
   async function loadLeaderboard() {
-    const { data } = await sb.from('leaderboard').select('*').order('rank');
-    if (!data || data.length === 0) return;
+    let data;
+    if (isCurrentSeason()) {
+      const res = await sb.from('leaderboard').select('*').order('rank');
+      data = res.data;
+    } else {
+      const res = await sb.from('season_results').select('*').eq('season', viewedSeason.id).order('rank');
+      data = (res.data ?? []).map(p => {
+        const total = p.wins + p.losses;
+        return { ...p, winrate: total > 0 ? Math.round(p.wins / total * 100) : 0 };
+      });
+    }
+    if (!data || data.length === 0) {
+      document.getElementById('podium').innerHTML = '';
+      document.getElementById('leaderboard').innerHTML = '<p class="loading">Aucun joueur pour cette saison.</p>';
+      document.getElementById('badges-section').style.display = 'none';
+      return;
+    }
 
     vacheId = computeVache(data);
 
-    const ranked     = data.filter(p => (p.wins + p.losses) >= PLACEMENT_THRESHOLD);
-    const placements = data.filter(p => (p.wins + p.losses) <  PLACEMENT_THRESHOLD);
+    // En saison passée, tout le monde est "classé" (figé). En cours : seuil de placement.
+    const ranked     = isCurrentSeason() ? data.filter(p => (p.wins + p.losses) >= PLACEMENT_THRESHOLD) : data;
+    const placements = isCurrentSeason() ? data.filter(p => (p.wins + p.losses) <  PLACEMENT_THRESHOLD) : [];
 
-    const { count: totalMatches } = await sb.from('matches').select('*', { count: 'exact', head: true });
+    const [{ count: totalMatches }, { count: seasonMatches }] = await Promise.all([
+      sb.from('matches').select('*', { count: 'exact', head: true }),
+      seasonFilterMatches(sb.from('matches').select('*', { count: 'exact', head: true })),
+    ]);
+    const seasonLabel = isCurrentSeason() ? 'cette saison' : 'en ' + viewedSeason.label.toLowerCase();
     document.getElementById('subtitle').textContent =
-      `${ranked.length} joueurs classés · ${totalMatches ?? 0} matchs joués`;
+      `${ranked.length} joueurs classés · ${totalMatches ?? 0} matchs (${seasonMatches ?? 0} ${seasonLabel})`;
+
+    loadBadges(data);
 
     // Podium top 3
     const top3 = ranked.slice(0, 3);
@@ -505,6 +607,113 @@
     }
   }
 
+  // ── Badges de saison ──────────────────────────────────────────────────────────
+
+  async function loadBadges(standings) {
+    const section = document.getElementById('badges-section');
+
+    let mq = sb.from('matches').select('winner_id, loser_id, winner_delta, loser_delta, played_at').order('played_at');
+    mq = seasonFilterMatches(mq);
+    const [{ data: matches }, { data: top1 }] = await Promise.all([
+      mq,
+      sb.from('top1_log').select('player_id, started_at, ended_at'),
+    ]);
+
+    const badges = computeBadges(matches ?? [], standings, top1 ?? []);
+    if (badges.length === 0) { section.style.display = 'none'; return; }
+
+    document.getElementById('badges').innerHTML = badges.map(b => `
+      <div class="badge-card">
+        <span class="b-icon">${b.icon}</span>
+        <div style="min-width:0">
+          <div class="b-label">${escHtml(b.label)}</div>
+          <div class="b-name">${escHtml(b.name)}</div>
+          <div class="b-detail">${escHtml(b.detail)}</div>
+        </div>
+      </div>`).join('');
+    section.style.display = '';
+  }
+
+  function computeBadges(matches, standings, top1) {
+    const pmap = {};
+    for (const p of standings) pmap[p.id] = p;
+    const nameOf = id => pmap[id]?.display_name ?? '???';
+
+    const wl = {}, delta = {};
+    for (const m of matches) {
+      (wl[m.winner_id] ??= { w: 0, l: 0 }).w++;
+      (wl[m.loser_id]  ??= { w: 0, l: 0 }).l++;
+      delta[m.winner_id] = (delta[m.winner_id] ?? 0) + m.winner_delta;
+      delta[m.loser_id]  = (delta[m.loser_id]  ?? 0) + m.loser_delta;
+    }
+
+    const out = [];
+    const MIN = 10;
+
+    // 🏆 Champion (rang 1)
+    const champ = standings.find(p => p.rank === 1) ?? standings[0];
+    if (champ) out.push({ icon: '🏆', label: 'Champion', name: champ.display_name, detail: `${champ.elo} ELO` });
+
+    // 🔥 Meilleur WR / 🐮 Vache à lait (min 10 matchs)
+    const wr = e => e[1].w / (e[1].w + e[1].l);
+    const eligible = Object.entries(wl).filter(([id, v]) => (v.w + v.l) >= MIN);
+    if (eligible.length) {
+      const best  = eligible.reduce((a, b) => wr(a) >= wr(b) ? a : b);
+      const worst = eligible.reduce((a, b) => wr(a) <= wr(b) ? a : b);
+      out.push({ icon: '🔥', label: 'Meilleur winrate', name: nameOf(best[0]),  detail: `${Math.round(wr(best) * 100)}% (${best[1].w}V/${best[1].l}D)` });
+      out.push({ icon: '🐮', label: 'Vache à lait',     name: nameOf(worst[0]), detail: `${Math.round(wr(worst) * 100)}% (${worst[1].w}V/${worst[1].l}D)` });
+    }
+
+    // 🏓 Plus actif
+    const active = Object.entries(wl).map(([id, v]) => [id, v.w + v.l]).sort((a, b) => b[1] - a[1])[0];
+    if (active) out.push({ icon: '🏓', label: 'Plus actif', name: nameOf(active[0]), detail: `${active[1]} matchs` });
+
+    // 📈 Plus grosse progression ELO sur la saison
+    const prog = Object.entries(delta).sort((a, b) => b[1] - a[1])[0];
+    if (prog && prog[1] > 0) out.push({ icon: '📈', label: 'Plus grosse progression', name: nameOf(prog[0]), detail: `+${prog[1]} ELO` });
+
+    // 😈 Plus grosse bête noire (domination max sur un joueur)
+    const pair = {};
+    for (const m of matches) { const k = m.winner_id + '>' + m.loser_id; pair[k] = (pair[k] ?? 0) + 1; }
+    const topPair = Object.entries(pair).sort((a, b) => b[1] - a[1])[0];
+    if (topPair && topPair[1] >= 3) {
+      const [w, l] = topPair[0].split('>');
+      out.push({ icon: '😈', label: 'Plus grosse bête noire', name: nameOf(w), detail: `${topPair[1]} victoires vs ${nameOf(l)}` });
+    }
+
+    // ⚡ Plus longue série de victoires
+    const byPlayer = {};
+    for (const m of matches) {
+      (byPlayer[m.winner_id] ??= []).push({ t: m.played_at, won: true });
+      (byPlayer[m.loser_id]  ??= []).push({ t: m.played_at, won: false });
+    }
+    let streak = { id: null, n: 0 };
+    for (const [id, arr] of Object.entries(byPlayer)) {
+      arr.sort((a, b) => a.t < b.t ? -1 : 1);
+      let cur = 0, mx = 0;
+      for (const g of arr) { if (g.won) { cur++; mx = Math.max(mx, cur); } else cur = 0; }
+      if (mx > streak.n) streak = { id, n: mx };
+    }
+    if (streak.n >= 3) out.push({ icon: '⚡', label: 'Plus longue série', name: nameOf(streak.id), detail: `${streak.n} victoires d'affilée` });
+
+    // 👑 Roi du trône (jours passés n°1 sur la saison)
+    const start = new Date(viewedSeason.started_at).getTime();
+    const end   = viewedSeason.ended_at ? new Date(viewedSeason.ended_at).getTime() : Date.now();
+    const days = {};
+    for (const r of top1) {
+      const s = Math.max(new Date(r.started_at).getTime(), start);
+      const e = Math.min(r.ended_at ? new Date(r.ended_at).getTime() : Date.now(), end);
+      if (e > s) days[r.player_id] = (days[r.player_id] ?? 0) + (e - s);
+    }
+    const king = Object.entries(days).sort((a, b) => b[1] - a[1])[0];
+    if (king) {
+      const d = Math.floor(king[1] / 86400000);
+      out.push({ icon: '👑', label: 'Roi du trône', name: nameOf(king[0]), detail: `${d} jour${d > 1 ? 's' : ''} n°1` });
+    }
+
+    return out;
+  }
+
   // ── Matches ──────────────────────────────────────────────────────────────────
 
   const PER_PAGE = 10;
@@ -528,6 +737,8 @@
       .from('matches')
       .select('id, format, winner_id, loser_id, winner_delta, loser_delta, winner_elo_before, loser_elo_before, played_at, winner:players!matches_winner_id_fkey(display_name, avatar_url), loser:players!matches_loser_id_fkey(display_name, avatar_url)', { count: 'exact' })
       .order('played_at', { ascending: false });
+
+    query = seasonFilterMatches(query);
 
     if (searchIds !== null) {
       const list = searchIds.map(id => `"${id}"`).join(',');
@@ -594,23 +805,32 @@
   const INACTIVE_DAYS = 14;
 
   async function loadGraph() {
-    const [{ data: players }, { data: snaps }, { data: recent }] = await Promise.all([
+    let rq = sb.from('matches').select('winner_id, loser_id, played_at').order('played_at', { ascending: false });
+    rq = seasonFilterMatches(rq);
+    const [{ data: players }, { data: snapsRaw }, { data: recent }] = await Promise.all([
       sb.from('players').select('id, display_name, avatar_url').order('elo', { ascending: false }),
       sb.from('elo_snapshots').select('player_id, elo, date').order('date'),
-      sb.from('matches').select('winner_id, loser_id, played_at').order('played_at', { ascending: false }),
+      rq,
     ]);
 
     if (!players) return;
 
-    // Dernière activité par joueur (dernier match joué)
+    // Snapshots bornés à la saison
+    const startDate = viewedSeason.started_at.slice(0, 10);
+    const endDate   = viewedSeason.ended_at ? viewedSeason.ended_at.slice(0, 10) : '9999-12-31';
+    const snaps = (snapsRaw ?? []).filter(s => s.date >= startDate && s.date <= endDate);
+
+    // Dernière activité par joueur (dernier match de la saison)
     const lastPlayed = {};
     for (const m of recent ?? []) {
       if (!lastPlayed[m.winner_id]) lastPlayed[m.winner_id] = m.played_at;
       if (!lastPlayed[m.loser_id])  lastPlayed[m.loser_id]  = m.played_at;
     }
-    const cutoff = Date.now() - INACTIVE_DAYS * 86400000;
+    // Inactivité relative à la fin de saison (ou maintenant si en cours)
+    const refTime = viewedSeason.ended_at ? new Date(viewedSeason.ended_at).getTime() : Date.now();
+    const cutoff  = refTime - INACTIVE_DAYS * 86400000;
 
-    // On ne garde que les joueurs actifs (match dans les 14 derniers jours)
+    // On ne garde que les joueurs actifs (match dans les 14 derniers jours de la saison)
     allPlayers = players.filter(p => lastPlayed[p.id] && new Date(lastPlayed[p.id]).getTime() >= cutoff);
     checkedPlayers = new Set(allPlayers.map(p => p.id));
 
@@ -817,10 +1037,12 @@
   }
 
   // ── Init ─────────────────────────────────────────────────────────────────────
-  loadLeaderboard().then(() => {
+  (async () => {
+    await loadSeasons();
+    await loadLeaderboard();
     if (initTab === 'graph' && !chartInstance) loadGraph();
-  });
-  loadMatches();
+    loadMatches();
+  })();
   setInterval(() => { loadLeaderboard(); loadMatches(); }, 30_000);
 </script>
 </body>
