@@ -397,6 +397,56 @@
       margin-top: -2px;
     }
     .btn-toggle-all:hover { color: var(--text); }
+
+    /* ── Stats tab ── */
+    #stat-cats { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+    .stat-cat {
+      padding: 6px 13px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+      transition: border-color 0.12s, color 0.12s;
+    }
+    .stat-cat:hover { color: var(--text); }
+    .stat-cat.active {
+      background: color-mix(in srgb, var(--accent) 18%, var(--surface2));
+      border-color: var(--accent);
+      color: var(--text);
+    }
+    .stat-rank-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      margin-bottom: 5px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s;
+    }
+    .stat-rank-row:hover { background: var(--surface2); border-color: var(--accent); }
+    .stat-rank-row .srank { width: 24px; text-align: center; color: var(--muted); font-size: 0.85rem; flex-shrink: 0; }
+    .stat-rank-row .sname { flex: 1; font-weight: 600; font-size: 0.9rem; }
+    .stat-rank-row .sval  { font-weight: 700; color: var(--accent); font-size: 0.92rem; white-space: nowrap; }
+
+    .fun-fact {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 11px;
+    }
+    .fun-fact .ff-icon  { font-size: 1.5rem; flex-shrink: 0; }
+    .fun-fact .ff-label { font-size: 0.66rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .fun-fact .ff-text  { font-weight: 600; font-size: 0.88rem; margin-top: 1px; }
   </style>
 </head>
 <body>
@@ -408,6 +458,7 @@
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('classement', this)">🏆 Classement</button>
     <button class="tab-btn" onclick="switchTab('graph', this)">📈 Graphique ELO</button>
+    <button class="tab-btn" onclick="switchTab('stats', this)">📊 Stats</button>
   </div>
 </header>
 
@@ -447,6 +498,16 @@
     <div id="chart-container">
       <canvas id="elo-chart-canvas"></canvas>
     </div>
+  </div>
+
+  <!-- ── Onglet Stats ── -->
+  <div id="tab-stats" class="tab-pane">
+    <p class="section-title">Classement par catégorie</p>
+    <div id="stat-cats"></div>
+    <div id="stat-ranking"><p class="loading">Chargement...</p></div>
+
+    <p class="section-title">🎉 Fun facts</p>
+    <div id="fun-facts"></div>
   </div>
 
 </main>
@@ -517,12 +578,14 @@
     const id = document.getElementById('season-select').value;
     viewedSeason = SEASONS.find(s => String(s.id) === String(id)) ?? SEASONS[0];
     if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+    statsLoaded = false;
     currentPage = 0;
     searchIds = null;
     document.getElementById('match-search').value = '';
     loadLeaderboard();
     loadMatches(0);
     if (document.getElementById('tab-graph').classList.contains('active')) loadGraph();
+    if (document.getElementById('tab-stats').classList.contains('active')) loadStats();
   };
 
   // ── Tabs ──────────────────────────────────────────────────────────────────────
@@ -539,6 +602,7 @@
     setActiveTab(name);
     history.replaceState(null, '', '#' + name);
     if (name === 'graph' && !chartInstance) loadGraph();
+    if (name === 'stats' && !statsLoaded)   loadStats();
   };
 
   // Activer le bon onglet visuellement dès le départ
@@ -737,6 +801,173 @@
     }
 
     return out;
+  }
+
+  // ── Stats (classement par catégorie + fun facts) ─────────────────────────────
+
+  let statsLoaded = false;
+  let statsData   = null;
+  let currentCat  = 'elo';
+
+  const STAT_CATS = [
+    { key: 'elo',        label: '🏆 ELO',        keepZero: true,  val: p => p.elo,      fmt: v => v },
+    { key: 'winrate',    label: '🔥 Winrate',    keepZero: true,  val: p => p.played >= 10 ? p.winrate : -1, fmt: v => v + '%', hideIf: p => p.played < 10 },
+    { key: 'played',     label: '🏓 Matchs',     keepZero: true,  val: p => p.played,   fmt: v => v },
+    { key: 'wins',       label: '✅ Victoires',  keepZero: true,  val: p => p.wins,     fmt: v => v },
+    { key: 'losses',     label: '❌ Défaites',   keepZero: true,  val: p => p.losses,   fmt: v => v },
+    { key: 'streak',     label: '⚡ Série V',    keepZero: false, val: p => p.streak,   fmt: v => v + ' V' },
+    { key: 'comeback',   label: '📈 Remontée',   keepZero: false, val: p => p.comeback, fmt: v => '+' + v },
+    { key: 'days',       label: '👑 Jours n°1',  keepZero: false, val: p => p.days,     fmt: v => v + 'j' },
+    { key: 'given',      label: '💸 ELO donné',  keepZero: false, val: p => p.given,    fmt: v => v },
+    { key: 'domination', label: '😈 Domination', keepZero: false, val: p => p.domCount, fmt: (v, p) => `${v} (vs ${escHtml(p.domVs)})` },
+  ];
+
+  async function loadStats() {
+    let mq = sb.from('matches').select('winner_id, loser_id, winner_delta, loser_delta, played_at').order('played_at');
+    mq = seasonFilterMatches(mq);
+
+    let standings;
+    if (isCurrentSeason()) {
+      const r = await sb.from('leaderboard').select('*').order('rank');
+      standings = r.data ?? [];
+    } else {
+      const r = await sb.from('season_results').select('*').eq('season', viewedSeason.id).order('rank');
+      standings = (r.data ?? []).map(p => {
+        const t = p.wins + p.losses;
+        return { ...p, winrate: t > 0 ? Math.round(p.wins / t * 100) : 0 };
+      });
+    }
+
+    const [{ data: matches }, { data: top1 }] = await Promise.all([
+      mq, sb.from('top1_log').select('player_id, started_at, ended_at'),
+    ]);
+
+    statsData = computeStats(matches ?? [], standings, top1 ?? []);
+
+    document.getElementById('stat-cats').innerHTML = STAT_CATS.map(c =>
+      `<button class="stat-cat${c.key === currentCat ? ' active' : ''}" data-cat="${c.key}" onclick="selectStatCat('${c.key}')">${c.label}</button>`).join('');
+    renderStatRanking(currentCat);
+
+    const facts = computeFunFacts(matches ?? [], standings);
+    document.getElementById('fun-facts').innerHTML = facts.map(f => `
+      <div class="fun-fact">
+        <span class="ff-icon">${f.icon}</span>
+        <div><div class="ff-label">${escHtml(f.label)}</div><div class="ff-text">${escHtml(f.text)}</div></div>
+      </div>`).join('') || '<p class="loading">Pas encore de données.</p>';
+
+    statsLoaded = true;
+  }
+
+  window.selectStatCat = (k) => renderStatRanking(k);
+
+  function renderStatRanking(catKey) {
+    currentCat = catKey;
+    document.querySelectorAll('.stat-cat').forEach(b => b.classList.toggle('active', b.dataset.cat === catKey));
+    const cat = STAT_CATS.find(c => c.key === catKey);
+    let rows = statsData.slice();
+    if (cat.hideIf) rows = rows.filter(p => !cat.hideIf(p));
+    if (!cat.keepZero) rows = rows.filter(p => cat.val(p) > 0);
+    rows.sort((a, b) => cat.val(b) - cat.val(a));
+
+    document.getElementById('stat-ranking').innerHTML = rows.map((p, i) => `
+      <div class="stat-rank-row" onclick="openModal('${p.id}', '${escHtml(p.display_name)}')">
+        <span class="srank">${i + 1}</span>
+        ${p.avatar_url ? `<img class="avatar-sm" src="${p.avatar_url}" alt="">` : ''}
+        <span class="sname">${escHtml(p.display_name)}${cow(p.id)}</span>
+        <span class="sval">${cat.fmt(cat.val(p), p)}</span>
+      </div>`).join('') || '<p class="loading">Aucune donnée pour cette catégorie.</p>';
+  }
+
+  function computeStats(matches, standings, top1) {
+    const wl = {}, given = {}, eloSeries = {}, running = {}, byPlayer = {}, pair = {};
+    for (const m of matches) {
+      (wl[m.winner_id] ??= { w: 0, l: 0 }).w++;
+      (wl[m.loser_id]  ??= { w: 0, l: 0 }).l++;
+      given[m.loser_id] = (given[m.loser_id] ?? 0) + m.winner_delta;
+      if (running[m.winner_id] === undefined) { running[m.winner_id] = 1000; eloSeries[m.winner_id] = [1000]; }
+      if (running[m.loser_id]  === undefined) { running[m.loser_id]  = 1000; eloSeries[m.loser_id]  = [1000]; }
+      running[m.winner_id] += m.winner_delta; eloSeries[m.winner_id].push(running[m.winner_id]);
+      running[m.loser_id]  += m.loser_delta;  eloSeries[m.loser_id].push(running[m.loser_id]);
+      (byPlayer[m.winner_id] ??= []).push(true);
+      (byPlayer[m.loser_id]  ??= []).push(false);
+      const k = m.winner_id + '>' + m.loser_id; pair[k] = (pair[k] ?? 0) + 1;
+    }
+
+    const comeback = {};
+    for (const [id, s] of Object.entries(eloSeries)) {
+      let min = s[0], g = 0;
+      for (const v of s) { if (v - min > g) g = v - min; if (v < min) min = v; }
+      comeback[id] = g;
+    }
+    const streak = {};
+    for (const [id, arr] of Object.entries(byPlayer)) {
+      let c = 0, mx = 0;
+      for (const w of arr) { if (w) { c++; mx = Math.max(mx, c); } else c = 0; }
+      streak[id] = mx;
+    }
+    const dom = {};
+    for (const [k, c] of Object.entries(pair)) {
+      const [w, l] = k.split('>');
+      if (!dom[w] || c > dom[w].count) dom[w] = { count: c, vs: l };
+    }
+    const start = new Date(viewedSeason.started_at).getTime();
+    const end   = viewedSeason.ended_at ? new Date(viewedSeason.ended_at).getTime() : Date.now();
+    const days = {};
+    for (const r of top1) {
+      const s = Math.max(new Date(r.started_at).getTime(), start);
+      const e = Math.min(r.ended_at ? new Date(r.ended_at).getTime() : Date.now(), end);
+      if (e > s) days[r.player_id] = (days[r.player_id] ?? 0) + (e - s);
+    }
+    const nameOf = id => standings.find(p => p.id === id)?.display_name ?? '?';
+
+    return standings.map(p => {
+      const w = wl[p.id]?.w ?? 0, l = wl[p.id]?.l ?? 0;
+      return {
+        id: p.id, display_name: p.display_name, avatar_url: p.avatar_url,
+        elo: p.elo, wins: w, losses: l, played: w + l,
+        winrate: (w + l) > 0 ? Math.round(w / (w + l) * 100) : 0,
+        streak: streak[p.id] ?? 0, comeback: comeback[p.id] ?? 0,
+        given: given[p.id] ?? 0, days: Math.floor((days[p.id] ?? 0) / 86400000),
+        domCount: dom[p.id]?.count ?? 0, domVs: dom[p.id] ? nameOf(dom[p.id].vs) : '',
+      };
+    });
+  }
+
+  function computeFunFacts(matches, standings) {
+    const nameOf = id => standings.find(p => p.id === id)?.display_name ?? '?';
+    const facts = [];
+    if (!matches.length) return facts;
+
+    // 🎰 Plus gros upset
+    const up = matches.reduce((a, b) => b.winner_delta > a.winner_delta ? b : a);
+    facts.push({ icon: '🎰', label: 'Plus gros upset', text: `${nameOf(up.winner_id)} a fait tomber ${nameOf(up.loser_id)} (+${up.winner_delta} ELO d'un coup)` });
+
+    // 🤜 Plus grosse rivalité (paire la plus jouée)
+    const pc = {};
+    for (const m of matches) { const k = [m.winner_id, m.loser_id].sort().join('|'); pc[k] = (pc[k] ?? 0) + 1; }
+    const [rk, rn] = Object.entries(pc).sort((a, b) => b[1] - a[1])[0];
+    const [a, b] = rk.split('|');
+    facts.push({ icon: '🤜', label: 'Plus grosse rivalité', text: `${nameOf(a)} vs ${nameOf(b)} — ${rn} matchs` });
+
+    // 🥶 Plus longue série de défaites
+    const byP = {};
+    for (const m of matches) { (byP[m.winner_id] ??= []).push(true); (byP[m.loser_id] ??= []).push(false); }
+    let worst = { id: null, n: 0 };
+    for (const [id, arr] of Object.entries(byP)) {
+      let c = 0, mx = 0;
+      for (const w of arr) { if (!w) { c++; mx = Math.max(mx, c); } else c = 0; }
+      if (mx > worst.n) worst = { id, n: mx };
+    }
+    if (worst.id) facts.push({ icon: '🥶', label: 'Plus longue série de défaites', text: `${nameOf(worst.id)} — ${worst.n} défaites d'affilée` });
+
+    // 📅 Journée la plus active
+    const dc = {};
+    for (const m of matches) { const d = m.played_at.slice(0, 10); dc[d] = (dc[d] ?? 0) + 1; }
+    const [dd, dn] = Object.entries(dc).sort((a, b) => b[1] - a[1])[0];
+    const [, mo, da] = dd.split('-');
+    facts.push({ icon: '📅', label: 'Journée la plus active', text: `${da}/${mo} — ${dn} matchs joués` });
+
+    return facts;
   }
 
   // ── Matches ──────────────────────────────────────────────────────────────────
