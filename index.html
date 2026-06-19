@@ -1071,10 +1071,12 @@
 
     if (!players) return;
 
-    // Snapshots bornés à la saison
+    // Snapshots bornés à la saison : [début de cette saison, début de la suivante[
+    // (borne haute exclusive = pas de chevauchement le jour de transition)
     const startDate = viewedSeason.started_at.slice(0, 10);
-    const endDate   = viewedSeason.ended_at ? viewedSeason.ended_at.slice(0, 10) : '9999-12-31';
-    const snaps = (snapsRaw ?? []).filter(s => s.date >= startDate && s.date <= endDate);
+    const later     = SEASONS.filter(s => s.id > viewedSeason.id).sort((a, b) => a.id - b.id)[0];
+    const endDate   = later ? later.started_at.slice(0, 10) : '9999-12-31';
+    const snaps = (snapsRaw ?? []).filter(s => s.date >= startDate && s.date < endDate);
 
     // Dernière activité par joueur (dernier match de la saison)
     const lastPlayed = {};
