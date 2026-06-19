@@ -850,6 +850,8 @@
     ]);
 
     statsData = computeStats(matches ?? [], standings, top1 ?? []);
+    // On ne garde que les joueurs ayant joué au moins 1 match dans la saison
+    statsData = statsData.filter(p => p.played > 0);
 
     document.getElementById('stat-cats').innerHTML = STAT_CATS.map(c =>
       `<button class="stat-cat${c.key === currentCat ? ' active' : ''}" data-cat="${c.key}" onclick="selectStatCat('${c.key}')">${c.label}</button>`).join('');
