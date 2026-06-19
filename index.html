@@ -648,12 +648,10 @@
     for (const p of standings) pmap[p.id] = p;
     const nameOf = id => pmap[id]?.display_name ?? '???';
 
-    const wl = {}, delta = {};
+    const wl = {};
     for (const m of matches) {
       (wl[m.winner_id] ??= { w: 0, l: 0 }).w++;
       (wl[m.loser_id]  ??= { w: 0, l: 0 }).l++;
-      delta[m.winner_id] = (delta[m.winner_id] ?? 0) + m.winner_delta;
-      delta[m.loser_id]  = (delta[m.loser_id]  ?? 0) + m.loser_delta;
     }
 
     const out = [];
@@ -677,9 +675,27 @@
     const active = Object.entries(wl).map(([id, v]) => [id, v.w + v.l]).sort((a, b) => b[1] - a[1])[0];
     if (active) out.push({ icon: '🏓', label: 'Plus actif', name: nameOf(active[0]), detail: `${active[1]} matchs` });
 
-    // 📈 Plus grosse progression ELO sur la saison
-    const prog = Object.entries(delta).sort((a, b) => b[1] - a[1])[0];
-    if (prog && prog[1] > 0) out.push({ icon: '📈', label: 'Plus grosse progression', name: nameOf(prog[0]), detail: `+${prog[1]} ELO` });
+    // 📈 Plus grosse remontée (plus gros écart creux → sommet postérieur)
+    // On reconstruit la courbe ELO de chaque joueur (1000 + cumul des deltas, chronologique)
+    const eloSeries = {}, running = {};
+    for (const m of matches) {
+      if (running[m.winner_id] === undefined) { running[m.winner_id] = 1000; eloSeries[m.winner_id] = [1000]; }
+      if (running[m.loser_id]  === undefined) { running[m.loser_id]  = 1000; eloSeries[m.loser_id]  = [1000]; }
+      running[m.winner_id] += m.winner_delta; eloSeries[m.winner_id].push(running[m.winner_id]);
+      running[m.loser_id]  += m.loser_delta;  eloSeries[m.loser_id].push(running[m.loser_id]);
+    }
+    let comeback = { id: null, gain: 0, low: 0, high: 0 };
+    for (const [id, series] of Object.entries(eloSeries)) {
+      let minSoFar = series[0], gain = 0, low = series[0], high = series[0];
+      for (const v of series) {
+        if (v - minSoFar > gain) { gain = v - minSoFar; low = minSoFar; high = v; }
+        if (v < minSoFar) minSoFar = v;
+      }
+      if (gain > comeback.gain) comeback = { id, gain, low, high };
+    }
+    if (comeback.id && comeback.gain > 0) {
+      out.push({ icon: '📈', label: 'Plus grosse remontée', name: nameOf(comeback.id), detail: `+${comeback.gain} (de ${comeback.low} à ${comeback.high})` });
+    }
 
     // 😈 Plus grosse bête noire (domination max sur un joueur)
     const pair = {};
