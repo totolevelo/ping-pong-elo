@@ -623,10 +623,17 @@
         return { ...p, id: p.player_id, winrate: total > 0 ? Math.round(p.wins / total * 100) : 0 };
       });
     }
-    if (!data || data.length === 0) {
+    // On n'affiche que les joueurs ayant joué au moins 1 match dans la saison
+    // (exclut les comptes pré-enregistrés qui n'ont jamais joué)
+    data = (data ?? []).filter(p => (p.wins + p.losses) > 0);
+
+    if (data.length === 0) {
       document.getElementById('podium').innerHTML = '';
-      document.getElementById('leaderboard').innerHTML = '<p class="loading">Aucun joueur pour cette saison.</p>';
+      document.getElementById('leaderboard').innerHTML = '<p class="loading">🏓 Nouvelle saison — aucun match joué pour l\'instant.</p>';
       document.getElementById('badges-section').style.display = 'none';
+      document.getElementById('subtitle').textContent = isCurrentSeason()
+        ? 'Saison en cours — que le meilleur gagne !'
+        : 'Aucun match cette saison.';
       return;
     }
 
