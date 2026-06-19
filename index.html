@@ -620,7 +620,7 @@
       const res = await sb.from('season_results').select('*').eq('season', viewedSeason.id).order('rank');
       data = (res.data ?? []).map(p => {
         const total = p.wins + p.losses;
-        return { ...p, winrate: total > 0 ? Math.round(p.wins / total * 100) : 0 };
+        return { ...p, id: p.player_id, winrate: total > 0 ? Math.round(p.wins / total * 100) : 0 };
       });
     }
     if (!data || data.length === 0) {
@@ -834,7 +834,7 @@
       const r = await sb.from('season_results').select('*').eq('season', viewedSeason.id).order('rank');
       standings = (r.data ?? []).map(p => {
         const t = p.wins + p.losses;
-        return { ...p, winrate: t > 0 ? Math.round(p.wins / t * 100) : 0 };
+        return { ...p, id: p.player_id, winrate: t > 0 ? Math.round(p.wins / t * 100) : 0 };
       });
     }
 
