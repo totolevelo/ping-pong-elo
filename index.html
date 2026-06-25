@@ -1246,8 +1246,9 @@
 
     const [{ data: player }, { data: wins }, { data: losses }, { data: top1 }] = await Promise.all([
       sb.from('players').select('*').eq('id', playerId).single(),
-      sb.from('matches').select('loser_id, players!matches_loser_id_fkey(display_name)').eq('winner_id', playerId),
-      sb.from('matches').select('winner_id, players!matches_winner_id_fkey(display_name)').eq('loser_id', playerId),
+      // Bête noire / victime : bornées à la saison sélectionnée
+      seasonFilterMatches(sb.from('matches').select('loser_id, players!matches_loser_id_fkey(display_name)').eq('winner_id', playerId)),
+      seasonFilterMatches(sb.from('matches').select('winner_id, players!matches_winner_id_fkey(display_name)').eq('loser_id', playerId)),
       sb.from('top1_log').select('started_at, ended_at').eq('player_id', playerId),
     ]);
 
